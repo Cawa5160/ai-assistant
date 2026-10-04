@@ -387,6 +387,7 @@ class ExecutionProgressWindow:
     def __init__(self, steps: list):
         self.steps = steps
         self.abort_event = threading.Event()
+        self.pause_event = threading.Event()
         self._queue = queue.Queue()
         self._labels = []
         self._finished = False
@@ -597,6 +598,9 @@ class AgentBar:
         self.label.pack(side="left", fill="both", expand=True)
         tk.Button(self.win, text="🛑 Стоп", bg=theme.DANGER, fg="white", relief="flat", font=bold,
                   command=owner._on_stop).pack(side="right", fill="y")
+        self.pause_btn = tk.Button(self.win, text="⏸ Пауза", bg=theme.PRIMARY_DARK, fg="white", relief="flat",
+                                   font=bold, command=owner.toggle_pause)
+        self.pause_btn.pack(side="right", fill="y")
         tk.Button(self.win, text="📋 Журнал", bg=theme.PRIMARY_DARK, fg="white", relief="flat", font=bold,
                   command=owner.toggle_log).pack(side="right", fill="y")
 
@@ -613,6 +617,9 @@ class AgentBar:
 
     def set_text(self, text: str):
         self.label.config(text="🤖 " + text[:64])
+
+    def set_paused(self, paused: bool):
+        self.pause_btn.config(text="▶ Продолжить" if paused else "⏸ Пауза")
 
     def close(self):
         try:
@@ -634,6 +641,7 @@ class AgentWindow:
 
     def __init__(self, goal: str, max_steps: int):
         self.abort_event = threading.Event()
+        self.pause_event = threading.Event()
         self._queue = queue.Queue()
         self._confirm_event = threading.Event()
         self._confirm_answer = False
@@ -723,8 +731,19 @@ class AgentWindow:
             self._log_visible = False
             self.win.iconify()                   # ответил — снова освобождаем экран для ИИ
 
+    def toggle_pause(self):
+        if self.pause_event.is_set():
+            self.pause_event.clear()
+            self.bar.set_paused(False)
+            self.bar.set_text("Продолжаю…")
+        else:
+            self.pause_event.set()
+            self.bar.set_paused(True)
+            self.bar.set_text("Пауза — нажми «Продолжить»")
+
     def _on_stop(self):
         self.abort_event.set()
+        self.pause_event.clear()
         self.status_label.config(text="Останавливаю после текущего действия…")
         self.bar.set_text("Останавливаю…")
         if not self._confirm_event.is_set():

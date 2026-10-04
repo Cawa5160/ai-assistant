@@ -210,6 +210,16 @@ def _sleep(seconds: float, abort_event) -> bool:
     return not abort_event.is_set()
 
 
+def _wait_if_paused(ui) -> bool:
+    """Пока пользователь нажал «Пауза» — ждёт. False, если за это время нажали «Стоп»."""
+    paused = getattr(ui, "pause_event", None)
+    while paused is not None and paused.is_set():
+        if ui.abort_event.is_set():
+            return False
+        time.sleep(0.2)
+    return not ui.abort_event.is_set()
+
+
 def run_agent(goal: str, ui, first_decision=None):
     """
     Выполняет задачу циклом. ui — объект с abort_event, add_step(n, text),
@@ -228,7 +238,7 @@ def run_agent(goal: str, ui, first_decision=None):
     same_streak = empty_streak = still_streak = 0
 
     for step_no in range(1, max_steps + 1):
-        if ui.abort_event.is_set():
+        if not _wait_if_paused(ui):
             return False, "Остановлено пользователем."
 
         if decision is None:
