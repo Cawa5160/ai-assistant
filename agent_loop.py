@@ -210,6 +210,36 @@ def _sleep(seconds: float, abort_event) -> bool:
     return not abort_event.is_set()
 
 
+def _show_preview(ui, shot, decision):
+    """Показывает в журнале кадр с отметками. Любая ошибка здесь не должна мешать работе."""
+    setter = getattr(ui, "set_preview", None)
+    if setter is None or not shot:
+        return
+    try:
+        w, h = screen_utils.get_screen_size()
+        setter(make_preview(shot, decision.get("steps", []), w, h))
+    except Exception:
+        pass
+
+
+def make_preview(shot_b64: str, steps: list, screen_w: int, screen_h: int, width: int = 460):
+    """Миниатюра кадра, который видел ИИ, с красными кругами в точках будущих кликов."""
+    import base64
+    import io
+    from PIL import Image, ImageDraw
+    img = Image.open(io.BytesIO(base64.b64decode(shot_b64))).convert("RGB")
+    ratio = width / img.width
+    img = img.resize((width, max(1, int(img.height * ratio))))
+    draw = ImageDraw.Draw(img)
+    for s in steps:
+        args = s.get("args", {})
+        if s.get("action") in plan_validator.POINTER_ACTIONS and "x" in args and "y" in args:
+            px = args["x"] / max(1, screen_w - 1) * (img.width - 1)
+            py = args["y"] / max(1, screen_h - 1) * (img.height - 1)
+            draw.ellipse([px - 9, py - 9, px + 9, py + 9], outline="red", width=3)
+    return img
+
+
 def _wait_if_paused(ui) -> bool:
     """Пока пользователь нажал «Пауза» — ждёт. False, если за это время нажали «Стоп»."""
     paused = getattr(ui, "pause_event", None)
@@ -243,7 +273,8 @@ def run_agent(goal: str, ui, first_decision=None):
 
         if decision is None:
             try:
-                decision, _ = decide(goal, history, on_wait=waiting, cancel=ui.abort_event)
+                decision, shot = decide(goal, history, on_wait=waiting, cancel=ui.abort_event)
+                _show_preview(ui, shot, decision)
             except (ValueError, RuntimeError) as e:
                 return False, str(e)
             except Exception as e:

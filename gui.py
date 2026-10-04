@@ -655,7 +655,11 @@ class AgentWindow:
         tk.Label(self.win, text=f"Цель: {goal}", font=theme.FONT_BODY, bg=theme.BG,
                  wraplength=640, justify="left").pack(padx=16, anchor="w")
 
-        self.log_box = scrolledtext.ScrolledText(self.win, width=78, height=18, font=theme.FONT_MONO, wrap="word")
+        self.preview_label = tk.Label(self.win, text="Здесь появится кадр, который видит ИИ (красный круг — куда он собирается нажать)",
+                                      font=theme.FONT_BODY, fg=theme.TEXT_MUTED, bg=theme.BG)
+        self.preview_label.pack(padx=12, pady=(6, 0))
+        self._preview_photo = None
+        self.log_box = scrolledtext.ScrolledText(self.win, width=78, height=12, font=theme.FONT_MONO, wrap="word")
         self.log_box.pack(padx=12, pady=8, fill="both", expand=True)
         self.log_box.config(state="disabled")
 
@@ -689,6 +693,10 @@ class AgentWindow:
 
     def set_result(self, text: str):
         self._queue.put(("result", text))
+
+    def set_preview(self, image):
+        """image — готовый PIL-кадр (с отметками); показывается в журнале."""
+        self._queue.put(("preview", image))
 
     def request_confirm(self, text: str) -> bool:
         """Показывает вопрос в окне и ждёт ответа. Остановка автопилота = "нет"."""
@@ -773,6 +781,12 @@ class AgentWindow:
                     self._append(f"     → {item[1]}\n")
                     if item[1].startswith("⏳"):
                         self.bar.set_text(item[1])
+                elif kind == "preview":
+                    try:
+                        self._preview_photo = ImageTk.PhotoImage(item[1])
+                        self.preview_label.config(image=self._preview_photo, text="")
+                    except Exception:
+                        pass
                 elif kind == "confirm":
                     self.confirm_label.config(text=item[1])
                     self.confirm_frame.pack(before=self.status_label, pady=6)
