@@ -111,3 +111,42 @@ def style_window(root):
             root.option_add(key, value)
     except Exception:
         pass
+
+
+# ---------- Ctrl+C / Ctrl+V / Ctrl+X / Ctrl+A на любой раскладке ----------
+
+_LATIN_KEYSYMS = {"c", "v", "x", "a"}
+_COPY_PASTE_CODES = {86: "<<Paste>>", 67: "<<Copy>>", 88: "<<Cut>>"}   # коды клавиш Windows: V, C, X (не зависят от раскладки)
+
+
+def _ctrl_key(event):
+    """
+    Tk привязывает Ctrl+C/V/X/A к ЛАТИНСКИМ буквам, поэтому на русской/украинской раскладке они молчат.
+    Здесь ловим те же клавиши по коду и вызываем стандартные действия. На латинской раскладке ничего
+    не делаем — там Tk сам справится (иначе вставка сработала бы дважды).
+    """
+    if str(getattr(event, "keysym", "")).lower() in _LATIN_KEYSYMS:
+        return None
+    widget = event.widget
+    code = getattr(event, "keycode", 0)
+    try:
+        virtual = _COPY_PASTE_CODES.get(code)
+        if virtual:
+            widget.event_generate(virtual)
+            return "break"
+        if code == 65:                                   # Ctrl+A — выделить всё
+            if widget.winfo_class() == "Text":
+                widget.tag_add("sel", "1.0", "end-1c")
+                return "break"
+            if widget.winfo_class() in ("Entry", "TEntry"):
+                widget.select_range(0, "end")
+                widget.icursor("end")
+                return "break"
+    except Exception:
+        pass
+    return None
+
+
+def enable_clipboard_shortcuts(root):
+    """Включает Ctrl+C/V/X/A на любой раскладке во всех окнах приложения."""
+    root.bind_all("<Control-KeyPress>", _ctrl_key, add="+")

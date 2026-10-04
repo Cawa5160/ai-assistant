@@ -118,6 +118,7 @@ class AppWindow:
         # Мост "рабочие потоки -> интерфейс" включаем СРАЗУ: уже при построении страниц запускаются
         # фоновые проверки, и их результат обязан вернуться через очередь, а не тронуть виджеты из чужого потока.
         ui_thread.init(self.root)
+        theme.enable_clipboard_shortcuts(self.root)      # Ctrl+C/V/X/A работают и на русской раскладке
         self.root.title("AI Ассистент")
         self._hide_notified = False
         self._visible = False
