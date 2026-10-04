@@ -59,6 +59,7 @@ ALLOWED_KEYS = {
     "enter", "esc", "escape", "tab", "space", "backspace", "delete",
     "up", "down", "left", "right", "home", "end", "pageup", "pagedown",
     "ctrl", "shift", "alt", "win",
+    "volumeup", "volumedown", "volumemute", "playpause", "nexttrack", "prevtrack", "printscreen",
     "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12",
 } | set("abcdefghijklmnopqrstuvwxyz") | set("0123456789")
 
