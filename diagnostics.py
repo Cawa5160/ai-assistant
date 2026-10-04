@@ -103,4 +103,11 @@ def run_checks() -> list:
     except Exception as e:
         results.append(("Доступ на запись в папку приложения", False, str(e)))
 
+    try:
+        import updater
+        state, text, url = updater.check()
+        results.append(("Обновления", state != "new", text + (f" — {url}" if state == "new" else "")))
+    except Exception as e:
+        results.append(("Обновления", True, f"не проверено ({e})"))
+
     return results
