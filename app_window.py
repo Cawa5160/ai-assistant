@@ -694,6 +694,7 @@ class AppWindow:
         self._s_keys = self._text_box(s, 4, "\n".join(cur.get("gemini_api_keys", [])))
         row = tk.Frame(s, bg=theme.CARD_BG)
         row.pack(fill="x", pady=(8, 0))
+        _button(row, "➕ Вставить ключ из буфера", self._paste_key, "primary", small=True).pack(side="left", padx=(0, 8))
         _button(row, "Проверить все ключи", self._test_keys, "neutral", small=True).pack(side="left", padx=(0, 8))
         _button(row, "Статус ротации", self._show_rotation, "neutral", small=True).pack(side="left")
         self._s_result = tk.Text(s, height=4, wrap="word", font=theme.FONT_MONO, bd=0, relief="flat",
@@ -796,7 +797,32 @@ class AppWindow:
             pass
 
     def _keys_from_box(self):
-        return [line.strip() for line in self._s_keys.get("1.0", "end").splitlines() if line.strip()]
+        """Ключи из поля. Понимает и «по одному на строку», и через пробел/запятую/точку с запятой в одну строку."""
+        text = self._s_keys.get("1.0", "end")
+        found = re.findall(r"AIza[0-9A-Za-z_\-]{20,}", text)
+        if found:
+            return list(dict.fromkeys(found))              # без повторов, порядок сохраняется
+        return [p for p in re.split(r"[\s,;]+", text) if p]
+
+    def _set_result(self, text: str):
+        self._set_text(self._s_result, text)
+
+    def _paste_key(self):
+        """Кнопка «Вставить ключ из буфера»: добавляет скопированный ключ новой строкой."""
+        try:
+            clip = self.root.clipboard_get().strip()
+        except Exception:
+            self._set_result("Буфер обмена пуст — сначала скопируй ключ на странице Google AI Studio.")
+            return
+        new = re.findall(r"AIza[0-9A-Za-z_\-]{20,}", clip) or ([clip] if clip and len(clip) < 200 else [])
+        if not new:
+            self._set_result("В буфере не похоже на ключ (ключ начинается с AIza…).")
+            return
+        have = self._keys_from_box()
+        added = [k for k in new if k not in have]
+        self._s_keys.delete("1.0", "end")
+        self._s_keys.insert("1.0", "\n".join(have + added))
+        self._set_result(f"Добавлено ключей: {len(added)}. Всего: {len(have) + len(added)}. Нажми «Сохранить» внизу.")
 
     def _test_keys(self):
         keys = self._keys_from_box()
