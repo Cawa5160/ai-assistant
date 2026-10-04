@@ -9,6 +9,7 @@ import shutil
 import time
 import webbrowser
 import pyautogui
+import audit
 import psutil
 
 import config
@@ -170,6 +171,7 @@ def run_step(step: dict):
     """
     action = step.get("action")
     args = dict(step.get("args", {}))
+    audit.record(step)
 
     if action == "open_app":
         open_app(args["app_name"])

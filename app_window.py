@@ -9,6 +9,7 @@
 диагностика) выполняется в отдельных потоках, а результат возвращается через
 ui_thread.post — интерфейс не подвисает.
 """
+import os
 import re
 import threading
 import tkinter as tk
@@ -913,6 +914,17 @@ class AppWindow:
 
     # ===================== ПРОВЕРКА СИСТЕМЫ =====================
 
+    def _open_audit(self):
+        """Открывает audit_log.jsonl (что именно делала программа) в блокноте."""
+        import audit
+        p = audit._path()
+        try:
+            if not os.path.exists(p):
+                open(p, "a", encoding="utf-8").close()
+            os.startfile(p)
+        except Exception as e:
+            self.controller.notify_hidden(f"Не удалось открыть журнал: {e}") if hasattr(self.controller, "notify_hidden") else None
+
     def _build_diag(self, parent):
         page = tk.Frame(parent, bg=theme.BG)
         head = tk.Frame(page, bg=theme.BG)
@@ -920,6 +932,7 @@ class AppWindow:
         tk.Label(head, text="Проверка системы", font=_font(18, True), bg=theme.BG, fg=theme.TEXT).pack(side="left")
         _button(head, "📋 Копировать", self._copy_diag, "neutral", small=True).pack(side="right", padx=(8, 0))
         _button(head, "↻ Проверить снова", self.refresh, "neutral", small=True).pack(side="right")
+        _button(head, "🧾 Журнал действий", self._open_audit, "neutral", small=True).pack(side="right", padx=(0, 8))
         tk.Label(page, text="Если что-то не работает (голос, ключи, автозагрузка) — причина обычно видна здесь.",
                  font=_font(9), fg=theme.TEXT_MUTED, bg=theme.BG, anchor="w").pack(fill="x", padx=32)
         self._diag_box = scrolledtext.ScrolledText(page, font=theme.FONT_MONO, wrap="word", bd=0, relief="flat",

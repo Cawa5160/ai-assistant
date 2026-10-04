@@ -8,3 +8,4 @@ action_log.txt*
 build/
 dist/
 *.spec
+audit_log.jsonl*
