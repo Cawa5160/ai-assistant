@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+settings.json
+history.json
+scheduled_tasks.json
+.instance.lock
+action_log.txt*
+build/
+dist/
+*.spec
