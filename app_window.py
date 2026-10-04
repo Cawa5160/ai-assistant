@@ -350,7 +350,18 @@ class AppWindow:
         self._hint = tk.Label(body, text="Enter — выполнить · Shift+Enter — новая строка · Ctrl+Shift+A — быстрая "
                                          "команда из любого места",
                               font=_font(9), fg=theme.TEXT_MUTED, bg=theme.BG, anchor="w")
-        self._hint.pack(fill="x", pady=(6, 10))
+        self._hint.pack(fill="x", pady=(6, 4))
+
+        # Переключатель «только смотреть» прямо на главной: действует сразу, без кнопки «Сохранить»
+        self._view_only_var = tk.BooleanVar(master=self.root, value=bool(config.get("view_only")))
+
+        def _toggle_view_only():
+            config.save({"view_only": bool(self._view_only_var.get())})
+
+        tk.Checkbutton(body, text="👁 Только смотреть — ИИ отвечает про экран, но ничего не нажимает и не печатает",
+                       variable=self._view_only_var, command=_toggle_view_only, bg=theme.BG, fg=theme.TEXT,
+                       activebackground=theme.BG, selectcolor=theme.INPUT_BG, font=_font(9),
+                       anchor="w").pack(fill="x", pady=(0, 10))
 
         tk.Label(body, text="Попробуй, например:", font=_font(9, True), fg=theme.TEXT_MUTED, bg=theme.BG,
                  anchor="w").pack(fill="x")
@@ -954,6 +965,8 @@ class AppWindow:
         except Exception as e:
             self._show_status(f"Не удалось сохранить: {e}", False)
             return
+        if hasattr(self, "_view_only_var"):
+            self._view_only_var.set(bool(values.get("view_only")))
         if (values["theme"], values["accent"]) != old_theme:
             self.rebuild("settings")
         self._show_status("✓ Сохранено", True)
