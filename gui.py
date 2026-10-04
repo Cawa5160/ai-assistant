@@ -681,7 +681,9 @@ class AgentWindow:
         self.status_label.pack(pady=(4, 2))
         self.stop_btn = tk.Button(self.win, text="🛑 Остановить", bg=theme.DANGER, fg="white", relief="flat",
                                   font=bold, command=self._on_stop)
-        self.stop_btn.pack(pady=(4, 12))
+        self.stop_btn.pack(pady=(4, 6))
+        tk.Button(self.win, text="📋 Копировать журнал", bg=theme.NEUTRAL, fg="white", relief="flat",
+                  font=("Segoe UI", 9), command=self._copy_log).pack(pady=(0, 12))
 
         exclude_from_capture(self.win)
         self.bar = AgentBar(self)
@@ -739,6 +741,16 @@ class AgentWindow:
         if not self._finished:
             self._log_visible = False
             self.win.iconify()                   # ответил — снова освобождаем экран для ИИ
+
+    def _copy_log(self):
+        """Копирует весь журнал автопилота в буфер обмена (чтобы прислать ошибку текстом, а не фото экрана)."""
+        try:
+            text = self.log_box.get("1.0", "end").strip()
+            self.win.clipboard_clear()
+            self.win.clipboard_append(text)
+            self.status_label.config(text="Журнал скопирован в буфер обмена.")
+        except Exception:
+            pass
 
     def toggle_pause(self):
         if self.pause_event.is_set():

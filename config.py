@@ -13,7 +13,7 @@ BASE_DIR = DATA_DIR  # рядом со скриптом (или рядом с .e
 SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
 LOG_FILE = os.path.join(BASE_DIR, "action_log.txt")
 
-APP_VERSION = "1.8.2"
+APP_VERSION = "1.9.0"
 SETTINGS_VERSION = 2  # растёт, когда меняются значения по умолчанию, которые нужно применить и старым установкам
 
 DEFAULTS = {
@@ -25,6 +25,8 @@ DEFAULTS = {
     "requests_per_minute": 8,  # свой лимит запросов к Gemini в минуту на ключ (0 = без ограничения)
     "agent_step_delay": 0.6,    # пауза после действия, чтобы интерфейс успел обновиться, сек.
     "agent_thinking": "minimal",   # уровень "размышлений" Gemini 3.x для автопилота: minimal|low|medium|high ("" = по умолчанию)
+    "view_only": False,         # режим «только смотреть»: ИИ отвечает про экран, но ничего не нажимает и не печатает
+    "accent": "indigo",         # акцентный цвет: indigo|blue|green|pink|orange
     "use_ui_elements": True,    # давать ИИ список кнопок/полей окна (Windows UI Automation) вместе со скриншотом
     "theme": "light",           # light | dark | system
     "hotkey_open_window": "ctrl+shift+a",

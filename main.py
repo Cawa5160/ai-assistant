@@ -58,6 +58,8 @@ import single_instance
 from privacy import redact
 from local_brain import try_local_plan
 from quick_commands import try_quick_plan
+from quick_actions import try_quick_action
+import key_manager
 from logger import log
 
 _app = None
@@ -300,6 +302,61 @@ def _run_agent_visible(user_command: str, on_wait) -> str:
     return "ok"
 
 
+def _run_quick_action(user_command: str, action) -> str:
+    """Таймер, калькулятор, открытие папки — выполняет сама программа, без ИИ."""
+    summary, run = action
+    try:
+        result = run()
+    except Exception as e:
+        log(f"Быстрое действие не удалось: {e}")
+        notify("Ошибка", f"Не получилось: {e}")
+        history.add(user_command, summary, f"ошибка: {e}")
+        return "error"
+    notify("AI Ассистент", result or summary)
+    voice_output.speak(result or summary)
+    history.add(user_command, summary, "Готово: " + (result or summary))
+    return "ok"
+
+
+def _run_view_only(user_command: str) -> str:
+    """Режим «только смотреть»: ИИ смотрит на экран и отвечает, ничего не нажимая."""
+    _hide_own_windows()
+    try:
+        answer = agent_loop.look_and_answer(user_command)
+    except (ValueError, RuntimeError) as e:
+        notify("Ошибка", str(e))
+        history.add(user_command, "только смотреть", f"ошибка: {e}")
+        return "error"
+    except Exception as e:
+        notify("Ошибка", f"Ошибка обращения к ИИ: {e}")
+        history.add(user_command, "только смотреть", f"ошибка: {e}")
+        return "error"
+    finally:
+        _restore_own_windows()
+    gui.ask_yes_no("👁 Ответ (режим «только смотреть»)", answer[:1500], yes="Понятно", no="Закрыть")
+    history.add(user_command, "только смотреть", answer[:200])
+    return "ok"
+
+
+def _offer_retry_after_limit(user_command: str):
+    """Если у всех ключей кончился ДНЕВНОЙ лимит — предлагает повторить команду сама после сброса."""
+    try:
+        if not key_manager.all_daily_exhausted():
+            return
+        when = key_manager.next_daily_reset()
+        agree = gui.ask_yes_no(
+            "Дневной лимит Gemini исчерпан",
+            f"Лимит обновится около {when:%H:%M} (по твоему времени, {when:%d.%m}).\n\n"
+            f"Повторить команду автоматически?\n«{redact(user_command)[:120]}»\n\n"
+            "Компьютер должен быть включён, программа — работать в фоне.",
+            yes="Да, повторить", no="Нет")
+        if agree:
+            scheduler.add_task(user_command, [scheduler.WEEKDAYS[when.weekday()]], when.strftime("%H:%M"), once=True)
+            notify("AI Ассистент", f"Повторю команду в {when:%H:%M}.")
+    except Exception as e:
+        log(f"Не удалось предложить повтор после лимита: {e}")
+
+
 def process_command(user_command: str):
     if not user_command.strip():
         return
@@ -317,8 +374,18 @@ def process_command(user_command: str):
     outcome = "ok"
 
     try:
-        plan = try_quick_plan(user_command) or try_local_plan(user_command)
-        outcome = _run_local_plan(user_command, plan) if plan is not None else _run_agent(user_command)
+        action = try_quick_action(user_command, notify)
+        if action is not None:
+            outcome = _run_quick_action(user_command, action)
+        elif config.get("view_only"):
+            outcome = _run_view_only(user_command)
+        else:
+            plan = try_quick_plan(user_command) or try_local_plan(user_command)
+            if plan is not None:
+                outcome = _run_local_plan(user_command, plan)
+            else:
+                outcome = _run_agent(user_command)
+                _offer_retry_after_limit(user_command)
     except Exception as e:
         log(f"Необработанная ошибка при выполнении команды: {e}")
         notify("Ошибка", f"Что-то пошло не так: {e}")
@@ -399,6 +466,8 @@ def apply_settings(values: dict):
         "gemini_api_keys": values["gemini_api_keys"],
         "model": values["model"],
         "theme": values["theme"],
+        "accent": values.get("accent", "indigo"),
+        "view_only": bool(values.get("view_only", False)),
         "hotkey_open_window": values["hotkey_open_window"],
         "hotkey_voice": values.get("hotkey_voice", "ctrl+shift+v"),
         "hotkey_stop": values.get("hotkey_stop", "ctrl+shift+s"),

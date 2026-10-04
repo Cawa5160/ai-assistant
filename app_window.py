@@ -449,7 +449,14 @@ class AppWindow:
     def _collect_status(self):
         data = {}
         n = len(config.get("gemini_api_keys") or [])
-        data["gemini"] = ("ok", f"Подключено · ключей: {n}") if n else ("bad", "Нет ключа — добавь его в Настройках")
+        waiting = 0
+        try:
+            import key_manager
+            waiting = sum(1 for r in key_manager.status_report() if r["status"] != "готов")
+        except Exception:
+            pass
+        extra = f" (на паузе: {waiting})" if waiting else ""
+        data["gemini"] = ("ok", f"Подключено · ключей: {n}{extra}") if n else ("bad", "Нет ключа — добавь его в Настройках")
         ok, message = voice_input.check_microphone()
         data["voice"] = ("ok", "Доступен · " + message) if ok else ("bad", message)
         data["voice_fix"] = bool(voice_input.components_missing())
@@ -722,7 +729,20 @@ class AppWindow:
                            activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
                            font=_font(10)).pack(side="left", padx=(0, 16))
 
+        self._field_label(s, "Акцентный цвет")
+        sv["accent"] = tk.StringVar(master=self.root, value=cur.get("accent", "indigo"))
+        arow = tk.Frame(s, bg=theme.CARD_BG)
+        arow.pack(anchor="w")
+        for value, label in theme.ACCENT_LABELS.items():
+            tk.Radiobutton(arow, text=label, value=value, variable=sv["accent"], bg=theme.CARD_BG, fg=theme.TEXT,
+                           activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
+                           font=_font(10)).pack(side="left", padx=(0, 14))
+
         s = self._section(body, "Управление")
+        sv["view_only"] = tk.BooleanVar(master=self.root, value=bool(cur.get("view_only", False)))
+        tk.Checkbutton(s, text="👁 Режим «только смотреть»: ИИ отвечает про экран, но ничего не нажимает и не печатает",
+                       variable=sv["view_only"], bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG,
+                       selectcolor=theme.INPUT_BG, font=_font(10)).pack(anchor="w", pady=(0, 8))
         self._field_label(s, "Горячая клавиша быстрой команды (работает из любого места)")
         sv["hotkey"] = tk.StringVar(master=self.root, value=cur.get("hotkey_open_window", "ctrl+shift+a"))
         self._entry(s, sv["hotkey"], 24)
@@ -917,6 +937,8 @@ class AppWindow:
             "local_model_enabled": sv["local_enabled"].get(),
             "local_model_name": sv["local_name"].get().strip() or "qwen2.5:3b",
             "autostart": sv["autostart"].get(),
+            "accent": sv["accent"].get(),
+            "view_only": sv["view_only"].get(),
         }
         try:
             rpm = int(sv["rpm"].get().strip() or "6")
@@ -926,13 +948,13 @@ class AppWindow:
         values["voice_device"] = sv["voice_device"].get()
         values["hotkey_voice"] = sv["hotkey_voice"].get().strip()
         values["hotkey_stop"] = sv["hotkey_stop"].get().strip()
-        old_theme = config.get("theme")
+        old_theme = (config.get("theme"), config.get("accent"))
         try:
             self.c.save_settings(values)
         except Exception as e:
             self._show_status(f"Не удалось сохранить: {e}", False)
             return
-        if values["theme"] != old_theme:
+        if (values["theme"], values["accent"]) != old_theme:
             self.rebuild("settings")
         self._show_status("✓ Сохранено", True)
 
@@ -947,7 +969,11 @@ class AppWindow:
                 open(p, "a", encoding="utf-8").close()
             os.startfile(p)
         except Exception as e:
-            self.controller.notify_hidden(f"Не удалось открыть журнал: {e}") if hasattr(self.controller, "notify_hidden") else None
+            try:
+                import gui
+                gui.show_notification(f"Не удалось открыть журнал: {e}")
+            except Exception:
+                pass
 
     def _build_diag(self, parent):
         page = tk.Frame(parent, bg=theme.BG)

@@ -22,7 +22,7 @@ FILES_TO_EMBED = [
     "action_executor.py", "agent_loop.py", "ai_brain.py", "app_paths.py", "app_window.py",
     "atomic_io.py", "autostart.py", "config.py", "diagnostics.py", "gui.py", "history.py",
     "installer_gui.py", "key_manager.py", "local_brain.py", "logger.py", "main.py",
-    "notifications.py", "quick_commands.py", "audit.py", "updater.py", "ui_elements.py", "plan_validator.py", "privacy.py", "scheduler.py",
+    "notifications.py", "quick_commands.py", "quick_actions.py", "audit.py", "updater.py", "ui_elements.py", "plan_validator.py", "privacy.py", "scheduler.py",
     "screen_utils.py", "secure_store.py", "shortcuts.py", "single_instance.py", "theme.py",
     "ui_thread.py", "voice_input.py", "voice_output.py",
     "requirements.txt", "README.md", "CHANGELOG.md", "LICENSE",
@@ -30,7 +30,7 @@ FILES_TO_EMBED = [
     "assets/app.ico", "assets/logo_128.png", "assets/logo_64.png",
 ]
 
-APP_VERSION_LABEL = "1.8.2"
+APP_VERSION_LABEL = "1.9.0"
 SUBDIRS = sorted({os.path.dirname(p) for p in FILES_TO_EMBED if "/" in p})
 
 

@@ -37,10 +37,12 @@ def get_all() -> list:
     return _load()
 
 
-def add_task(command: str, days: list, time_str: str) -> dict:
+def add_task(command: str, days: list, time_str: str, once: bool = False) -> dict:
     tasks = _load()
     new_id = max((t["id"] for t in tasks), default=0) + 1
     task = {"id": new_id, "command": command, "days": days, "time": time_str, "enabled": True}
+    if once:
+        task["once"] = True                 # выполнить один раз и удалить
     tasks.append(task)
     _save(tasks)
     log(f"Добавлена задача по расписанию #{new_id}: {command} ({','.join(days)} в {time_str})")
@@ -95,6 +97,8 @@ def start(on_due_callback):
                 log(f"Планировщик: время задачи #{t['id']} — {t['command']}")
                 try:
                     on_due_callback(t["command"])
+                    if t.get("once"):
+                        remove_task(t["id"])
                 except Exception as e:
                     log(f"Ошибка при запуске запланированной задачи: {e}")
             time.sleep(20)

@@ -140,3 +140,35 @@ def status_report() -> list:
             status = "готов"
         report.append({"masked": _mask(k), "status": status})
     return report
+
+
+def all_daily_exhausted() -> bool:
+    """True, если у ВСЕХ действующих ключей исчерпан дневной лимит (ждать придётся до сброса)."""
+    live = [x for x in get_keys() if x not in _invalid]
+    return bool(live) and all(cooldown_remaining(x) > 3600 for x in live)
+
+
+def _pacific_offset_hours(utc_dt) -> int:
+    """-7 летом (PDT) или -8 зимой (PST) по правилам США; без базы часовых поясов, которой на Windows может не быть."""
+    import datetime as dt
+
+    def nth_sunday(year, month, n):
+        first = dt.datetime(year, month, 1)
+        return first + dt.timedelta(days=(6 - first.weekday()) % 7 + 7 * (n - 1))
+
+    naive = utc_dt.replace(tzinfo=None)
+    start = nth_sunday(naive.year, 3, 2).replace(hour=10)     # 2:00 PST
+    end = nth_sunday(naive.year, 11, 1).replace(hour=9)       # 2:00 PDT
+    return -7 if start <= naive < end else -8
+
+
+def next_daily_reset():
+    """Ближайший сброс дневного лимита Google (полночь по Тихоокеанскому времени + 5 минут) — по ЛОКАЛЬНОМУ времени (naive)."""
+    import datetime as dt
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    off = _pacific_offset_hours(now_utc)
+    pacific_now = now_utc + dt.timedelta(hours=off)
+    target_pacific = (pacific_now + dt.timedelta(days=1)).replace(hour=0, minute=5, second=0, microsecond=0)
+    target_utc = target_pacific - dt.timedelta(hours=off)
+    local_offset = dt.datetime.now().astimezone().utcoffset()
+    return (target_utc + local_offset).replace(tzinfo=None)

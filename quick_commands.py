@@ -53,6 +53,10 @@ _MEDIA = [
 ]
 
 
+_SHOW_DESKTOP = re.compile(r"^\s*(?:покажи рабочий стол|сверни все окна|сверни всё|сверни все|покажи десктоп)\s*[.!]*\s*$", re.I)
+_CLOSE_WINDOW = re.compile(r"^\s*(?:закрой|закрыть)\s+(?:это\s+|текущее\s+)?окно\s*[.!]*\s*$", re.I)
+
+
 def _plan(summary, steps):
     return {"summary": summary, "steps": steps, "need_vision": False}
 
@@ -80,6 +84,10 @@ def _simple_plan(command: str):
         title = "на рабочий стол" if where == "desktop" else "в Изображения → Screenshots"
         return _plan(f"Сделать скриншот и сохранить {title}",
                      [{"action": "save_screenshot", "args": {"where": where}}])
+    if _SHOW_DESKTOP.match(command):
+        return _plan("Показать рабочий стол (Win+D)", [{"action": "hotkey", "args": {"keys": ["win", "d"]}}])
+    if _CLOSE_WINDOW.match(command):
+        return _plan("Закрыть текущее окно (Alt+F4)", [{"action": "hotkey", "args": {"keys": ["alt", "f4"]}}])
     if _VOL_UP.match(command):
         return _plan("Сделать звук громче", [{"action": "press_key", "args": {"key": "volumeup"}}] * 5)
     if _VOL_DOWN.match(command):

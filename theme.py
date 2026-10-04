@@ -42,6 +42,16 @@ THEMES = {
     },
 }
 
+ACCENTS = {   # (PRIMARY, PRIMARY_DARK, NAV_ACTIVE)
+    "light": {"indigo": ("#4F46E5", "#4338CA", "#E3E6FF"), "blue": ("#2563EB", "#1D4ED8", "#DBEAFE"),
+              "green": ("#16A34A", "#15803D", "#DCFCE7"), "pink": ("#DB2777", "#BE185D", "#FCE7F3"),
+              "orange": ("#EA580C", "#C2410C", "#FFEDD5")},
+    "dark": {"indigo": ("#818CF8", "#6366F1", "#33376A"), "blue": ("#60A5FA", "#3B82F6", "#1E3A8A"),
+             "green": ("#4ADE80", "#22C55E", "#14532D"), "pink": ("#F472B6", "#EC4899", "#831843"),
+             "orange": ("#FB923C", "#F97316", "#7C2D12")},
+}
+ACCENT_LABELS = {"indigo": "Индиго", "blue": "Синий", "green": "Зелёный", "pink": "Розовый", "orange": "Оранжевый"}
+
 THEME_LABELS = {"light": "Светлая", "dark": "Тёмная", "system": "Как в Windows"}
 
 
@@ -67,7 +77,12 @@ def current_theme_name() -> str:
 
 
 def palette() -> dict:
-    return THEMES[current_theme_name()]
+    name = current_theme_name()
+    colors = dict(THEMES[name])
+    accent = ACCENTS[name].get(config.get("accent") or "indigo")
+    if accent:
+        colors["PRIMARY"], colors["PRIMARY_DARK"], colors["NAV_ACTIVE"] = accent
+    return colors
 
 
 def __getattr__(name):
