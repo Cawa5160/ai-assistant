@@ -38,6 +38,7 @@ python -m PyInstaller --noconfirm --clean --onefile --noconsole ^
   --hidden-import keyring.backends.Windows ^
   --collect-data speech_recognition ^
   --hidden-import sounddevice ^
+  --collect-all uiautomation ^
   --collect-all sounddevice ^
   --collect-all _sounddevice_data ^
   main.py
