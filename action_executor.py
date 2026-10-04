@@ -109,14 +109,63 @@ def _paste_text(text: str):
     except Exception:
         previous = None
     pyperclip.copy(text)
-    time.sleep(0.05)
+    time.sleep(0.15)
     pyautogui.hotkey("ctrl", "v")
-    time.sleep(0.2)
+    time.sleep(0.8)         # приложение должно успеть прочитать буфер, прежде чем мы вернём старое содержимое
     if previous is not None:
         try:
             pyperclip.copy(previous)
         except Exception:
             pass
+
+
+def _type_unicode(text: str):
+    """
+    Печатает текст "как клавиатура" через SendInput + KEYEVENTF_UNICODE: работает с любым языком и
+    раскладкой и не зависит от буфера обмена (вставка через Ctrl+V в новом Блокноте Windows 11
+    иногда не срабатывала). Бросает исключение, если это не Windows — тогда вызывающий код
+    переключается на вставку через буфер.
+    """
+    import ctypes
+    ulong_ptr = ctypes.c_size_t
+
+    class MOUSEINPUT(ctypes.Structure):
+        _fields_ = [("dx", ctypes.c_int32), ("dy", ctypes.c_int32), ("mouseData", ctypes.c_uint32),
+                    ("dwFlags", ctypes.c_uint32), ("time", ctypes.c_uint32), ("dwExtraInfo", ulong_ptr)]
+
+    class KEYBDINPUT(ctypes.Structure):
+        _fields_ = [("wVk", ctypes.c_uint16), ("wScan", ctypes.c_uint16), ("dwFlags", ctypes.c_uint32),
+                    ("time", ctypes.c_uint32), ("dwExtraInfo", ulong_ptr)]
+
+    class HARDWAREINPUT(ctypes.Structure):
+        _fields_ = [("uMsg", ctypes.c_uint32), ("wParamL", ctypes.c_uint16), ("wParamH", ctypes.c_uint16)]
+
+    class _Union(ctypes.Union):
+        _fields_ = [("ki", KEYBDINPUT), ("mi", MOUSEINPUT), ("hi", HARDWAREINPUT)]
+
+    class INPUT(ctypes.Structure):
+        _fields_ = [("type", ctypes.c_uint32), ("u", _Union)]
+
+    send = ctypes.windll.user32.SendInput          # AttributeError вне Windows — это нормально
+    KEYUP, UNICODE, VK_RETURN, VK_TAB = 0x0002, 0x0004, 0x0D, 0x09
+
+    def key(vk=0, scan=0, flags=0):
+        inp = INPUT(type=1)
+        inp.u.ki = KEYBDINPUT(vk, scan, flags, 0, 0)
+        if send(1, ctypes.byref(inp), ctypes.sizeof(INPUT)) != 1:
+            raise OSError("SendInput не принял событие")
+
+    for ch in text.replace("\r\n", "\n"):
+        if ch == "\n":
+            key(vk=VK_RETURN); key(vk=VK_RETURN, flags=KEYUP)
+        elif ch == "\t":
+            key(vk=VK_TAB); key(vk=VK_TAB, flags=KEYUP)
+        else:
+            raw = ch.encode("utf-16-le")
+            for i in range(0, len(raw), 2):          # символы вне BMP идут парой суррогатов
+                unit = int.from_bytes(raw[i:i + 2], "little")
+                key(scan=unit, flags=UNICODE); key(scan=unit, flags=UNICODE | KEYUP)
+        time.sleep(0.008)
 
 
 def type_text(text: str, sensitive: bool = False):
@@ -127,8 +176,14 @@ def type_text(text: str, sensitive: bool = False):
 
     if text.isascii() and len(text) <= 200:
         pyautogui.write(text, interval=0.02)
-    else:
-        _paste_text(text)
+        return
+    if len(text) <= 300:
+        try:
+            _type_unicode(text)
+            return
+        except Exception as e:
+            log(f"Прямой ввод не удался ({type(e).__name__}), вставляю через буфер обмена")
+    _paste_text(text)
 
 
 def press_key(key: str):

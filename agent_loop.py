@@ -350,7 +350,7 @@ def run_agent(goal: str, ui, first_decision=None):
                 changed = screen_utils.screens_differ(before, screen_utils.take_screenshot_image(), CHANGE_THRESHOLD)
             except Exception:
                 changed = True
-        note = "экран изменился" if changed else "экран НЕ изменился (возможно, промах)"
+        note = "экран изменился" if changed else "экран не изменился (для клика в поле ввода это нормально; если ждал другого — проверь по скриншоту)"
         ui.set_result(f"{'; '.join(results)} — {note}")
         history.append({"n": step_no, "intent": intent,
                         "actions": "; ".join(describe_step(s) for s in current["steps"]),
