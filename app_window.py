@@ -797,12 +797,9 @@ class AppWindow:
             pass
 
     def _keys_from_box(self):
-        """Ключи из поля. Понимает и «по одному на строку», и через пробел/запятую/точку с запятой в одну строку."""
-        text = self._s_keys.get("1.0", "end")
-        found = re.findall(r"AIza[0-9A-Za-z_\-]{20,}", text)
-        if found:
-            return list(dict.fromkeys(found))              # без повторов, порядок сохраняется
-        return [p for p in re.split(r"[\s,;]+", text) if p]
+        """Ключи из поля: по одному на строку или через пробел/запятую; повторы убираются. Подходят и ключи AIza…, и новые AQ.…"""
+        parts = re.split(r"[\s,;]+", self._s_keys.get("1.0", "end"))
+        return list(dict.fromkeys(p for p in parts if p))
 
     def _set_result(self, text: str):
         self._set_text(self._s_result, text)
@@ -814,9 +811,9 @@ class AppWindow:
         except Exception:
             self._set_result("Буфер обмена пуст — сначала скопируй ключ на странице Google AI Studio.")
             return
-        new = re.findall(r"AIza[0-9A-Za-z_\-]{20,}", clip) or ([clip] if clip and len(clip) < 200 else [])
+        new = [p for p in re.split(r"[\s,;]+", clip) if re.fullmatch(r"[A-Za-z0-9_.\-]{20,}", p)]
         if not new:
-            self._set_result("В буфере не похоже на ключ (ключ начинается с AIza…).")
+            self._set_result("В буфере не похоже на ключ. Скопируй ключ целиком на странице Google AI Studio.")
             return
         have = self._keys_from_box()
         added = [k for k in new if k not in have]

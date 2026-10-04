@@ -215,15 +215,25 @@ def test_api_key(api_key: str):
     """Проверка одного ключа. Возвращает (успех, сообщение) — с настоящей причиной от Google."""
     if not api_key:
         return False, "Ключ пустой."
-    try:
-        resp = requests.post(
-            _gemini_url(), params={"key": api_key},
-            json={"contents": [{"role": "user", "parts": [{"text": "ping"}]}],
-                  "generationConfig": {"maxOutputTokens": 5}},
-            timeout=20,
-        )
-    except Exception as e:
-        return False, f"Не удалось проверить ключ (нет интернета?): {e}"
+    resp = None
+    last_error = None
+    for _attempt in range(2):                      # один повтор: Google иногда отвечает медленнее 20 секунд
+        try:
+            resp = requests.post(
+                _gemini_url(), params={"key": api_key},
+                json={"contents": [{"role": "user", "parts": [{"text": "ping"}]}],
+                      "generationConfig": {"maxOutputTokens": 5}},
+                timeout=40,
+            )
+            break
+        except requests.exceptions.Timeout as e:
+            last_error = ("Google не ответил за 40 секунд (медленная сеть или перегрузка). "
+                          "Это не значит, что ключ плохой — нажми «Проверить все ключи» ещё раз.")
+        except Exception as e:
+            last_error = f"Нет связи с Google ({type(e).__name__}) — проверь интернет."
+            break
+    if resp is None:
+        return False, last_error
     code = resp.status_code
     status, message = _error_info(resp)
     short = message.replace("\n", " ")[:160]
