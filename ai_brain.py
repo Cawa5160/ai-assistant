@@ -92,6 +92,8 @@ def _call_gemini(api_key: str, payload: dict):
         return None, "invalid", ""
 
     log(f"Gemini вернул код {code} ({status}): {message[:200]}")
+    if code == 400:
+        return None, "bad_params", message[:300]      # кривой запрос повтором не лечится
     return None, "server_error", ""
 
 
@@ -169,6 +171,8 @@ def generate(payload: dict, on_wait=None, cancel=None, max_wait: float = 150.0) 
             raise RuntimeError(
                 f"Модель Gemini «{config.get('model')}» недоступна (Google мог её отключить или переименовать). "
                 "Открой Настройки → Gemini → «Найти доступные модели» и выбери рабочую.")
+        if outcome == "bad_params":
+            raise RuntimeError(f"Gemini отклонил запрос: {kind}")
         if outcome == "network_error":
             net_fails += 1
             if net_fails >= 2:

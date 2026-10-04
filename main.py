@@ -57,6 +57,7 @@ import scheduler
 import single_instance
 from privacy import redact
 from local_brain import try_local_plan
+from quick_commands import try_quick_plan
 from logger import log
 
 _app = None
@@ -303,7 +304,7 @@ def process_command(user_command: str):
     outcome = "ok"
 
     try:
-        plan = try_local_plan(user_command)
+        plan = try_quick_plan(user_command) or try_local_plan(user_command)
         outcome = _run_local_plan(user_command, plan) if plan is not None else _run_agent(user_command)
     except Exception as e:
         log(f"Необработанная ошибка при выполнении команды: {e}")

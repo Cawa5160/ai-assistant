@@ -165,7 +165,7 @@ def _type_unicode(text: str):
             for i in range(0, len(raw), 2):          # символы вне BMP идут парой суррогатов
                 unit = int.from_bytes(raw[i:i + 2], "little")
                 key(scan=unit, flags=UNICODE); key(scan=unit, flags=UNICODE | KEYUP)
-        time.sleep(0.008)
+        time.sleep(0.02)
 
 
 def type_text(text: str, sensitive: bool = False):

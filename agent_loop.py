@@ -169,6 +169,15 @@ def _history_text(history: list) -> str:
     return "\n".join(lines)
 
 
+_THINKING_OK = True
+
+
+def _disable_thinking():
+    global _THINKING_OK
+    _THINKING_OK = False
+    log("Модель не приняла параметр thinkingLevel — дальше без него.")
+
+
 def decide(goal: str, history: list, on_wait=None, cancel=None):
     """
     Один запрос к ИИ: делает скриншот и спрашивает следующее действие.
@@ -203,7 +212,17 @@ def decide(goal: str, history: list, on_wait=None, cancel=None):
             "responseMimeType": "application/json",
         },
     }
-    data = ai_brain.generate(payload, on_wait=on_wait, cancel=cancel)
+    level = (config.get("agent_thinking") or "").strip()
+    if level and _THINKING_OK:
+        payload["generationConfig"]["thinkingConfig"] = {"thinkingLevel": level}
+    try:
+        data = ai_brain.generate(payload, on_wait=on_wait, cancel=cancel)
+    except (ValueError, RuntimeError) as e:
+        if "thinking" not in str(e).lower() or "thinkingConfig" not in payload["generationConfig"]:
+            raise
+        _disable_thinking()                       # эта модель не знает такой параметр — работаем без него
+        payload["generationConfig"].pop("thinkingConfig", None)
+        data = ai_brain.generate(payload, on_wait=on_wait, cancel=cancel)
     raw = ai_brain.parse_json(ai_brain.extract_text(data))
     return sanitize_decision(raw, screen_w, screen_h), screenshot_b64
 
@@ -329,7 +348,7 @@ def run_agent(goal: str, ui, first_decision=None):
             if plan_validator.classify_risk(step) == "high":
                 if not ui.request_confirm(f"⚠️ Потенциально необратимое действие:\n\n{text}\n\nРазрешить?"):
                     return False, "Остановлено: ты не разрешил потенциально опасное действие."
-            elif not _sleep(0.6, ui.abort_event):   # короткая пауза: успеть нажать «Остановить»
+            elif not _sleep(0.3, ui.abort_event):   # короткая пауза: успеть нажать «Остановить»
                 return False, "Остановлено пользователем."
 
             try:
