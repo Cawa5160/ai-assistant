@@ -18,6 +18,7 @@ ALLOWED_ACTIONS = {
     "right_click": {"x": (int, float), "y": (int, float)},
     "scroll": {"amount": (int, float)},
     "wait": {"seconds": (int, float)},
+    "save_screenshot": {"where": str},
     "type_text": {"text": str},
     "press_key": {"key": str},
     "hotkey": {"keys": list},
@@ -40,7 +41,7 @@ POINTER_ACTIONS = ("click", "double_click", "right_click")
 HIGH_RISK_ACTIONS = {"create_file", "move_file"}
 
 # open_url обратим и низкий риск сам по себе (после строгой проверки ниже).
-LOW_RISK_ACTIONS = {"open_url"}
+LOW_RISK_ACTIONS = {"open_url", "save_screenshot"}
 
 # open_app — низкий риск ТОЛЬКО для явно безопасных, общеизвестных программ;
 # остальное требует обычного клика (не "запрещено", а не авто-пропускается).
@@ -139,6 +140,10 @@ def validate_step(step):
         seconds = args["seconds"]
         if seconds != seconds or not (0 <= seconds <= 15):
             return False, "wait: допустимо от 0 до 15 секунд"
+
+    elif action == "save_screenshot":
+        if args["where"] not in ("desktop", "pictures"):
+            return False, "save_screenshot: where = desktop или pictures"
 
     elif action == "type_text":
         if len(args["text"]) > MAX_TEXT_LENGTH:

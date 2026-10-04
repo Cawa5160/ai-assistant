@@ -39,7 +39,10 @@ _YT = re.compile(
 _GOOGLE = re.compile(
     r"^\s*(?:(?:найди|поищи|знайди|search)\s+(?:в|у|на)\s+(?:гугле|гугл|google|интернете|інтернеті)|загугли|погугли|google)\s+"
     r"(?P<q>.+?)\s*[.!]*\s*$", re.I)
-_SCREENSHOT = re.compile(r"^\s*(?:сделай\s+|зроби\s+|сними\s+)?(?:скриншот|скрин|снимок экрана|знімок екрана)(?:\s+экрана)?\s*[.!]*\s*$", re.I)
+_SCREENSHOT = re.compile(
+    r"^\s*(?:пожалуйста[,\s]+)?(?:сделай\s+|зроби\s+|сними\s+)?(?:скриншот|скрин|снимок экрана|знімок екрана)(?:\s+экрана)?"
+    r"(?:\s+и\s+(?:сохрани|збережи|положи)(?:\s+его|\s+її)?)?"
+    r"(?P<where>\s+(?:на\s+)?(?:рабочем\s+столе|рабочий\s+стол|главном\s+экране|главный\s+экран|столе|робочому\s+столі))?\s*[.!]*\s*$", re.I)
 _VOL_UP = re.compile(r"^\s*(?:сделай\s+)?(?:громче|прибавь (?:звук|громкость)|увеличь громкость|звук погромче)\s*[.!]*\s*$", re.I)
 _VOL_DOWN = re.compile(r"^\s*(?:сделай\s+)?(?:тише|убавь (?:звук|громкость)|уменьши громкость|звук потише)\s*[.!]*\s*$", re.I)
 _MUTE = re.compile(r"^\s*(?:выключи звук|включи звук|без звука|заглуши|mute|отключи звук)\s*[.!]*\s*$", re.I)
@@ -71,9 +74,12 @@ def _simple_plan(command: str):
         q = m.group("q")
         return _plan(f"Искать в Google: {q[:60]}", [{"action": "open_url", "args": {
             "url": "https://www.google.com/search?q=" + quote_plus(q)}}])
-    if _SCREENSHOT.match(command):
-        return _plan("Сделать скриншот (сохранится в Изображения → Снимки экрана)",
-                     [{"action": "hotkey", "args": {"keys": ["win", "printscreen"]}}])
+    m = _SCREENSHOT.match(command)
+    if m:
+        where = "desktop" if (m.group("where") or re.search(r"сохрани|збережи", command, re.I)) else "pictures"
+        title = "на рабочий стол" if where == "desktop" else "в Изображения → Screenshots"
+        return _plan(f"Сделать скриншот и сохранить {title}",
+                     [{"action": "save_screenshot", "args": {"where": where}}])
     if _VOL_UP.match(command):
         return _plan("Сделать звук громче", [{"action": "press_key", "args": {"key": "volumeup"}}] * 5)
     if _VOL_DOWN.match(command):

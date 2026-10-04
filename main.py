@@ -195,6 +195,19 @@ def _restore_own_windows():
         ui_thread.post(_app.restore_after_agent)
 
 
+def _pre_capture():
+    if _active_agent is None:            # во время автопилота окна уже спрятаны им самим
+        _hide_own_windows()
+
+
+def _post_capture():
+    if _active_agent is None:
+        _restore_own_windows()
+
+
+action_executor.capture_hooks = (_pre_capture, _post_capture)
+
+
 def stop_agent():
     """Аварийная остановка автопилота из любого места (горячая клавиша / меню трея)."""
     window = _active_agent

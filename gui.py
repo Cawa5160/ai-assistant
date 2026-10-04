@@ -393,6 +393,7 @@ class ExecutionProgressWindow:
         self._finished = False
 
         self.win = _new_window("Выполнение плана", 560, 460, topmost=False)
+        exclude_from_capture(self.win)          # окно прогресса не должно попадать на скриншоты
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
 
         tk.Label(self.win, text="Выполняю план действий", font=theme.FONT_HEADING, bg=theme.BG).pack(pady=(10, 5))

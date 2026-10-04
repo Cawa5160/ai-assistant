@@ -168,6 +168,48 @@ def _type_unicode(text: str):
         time.sleep(0.02)
 
 
+def _user_folder(kind: str) -> str:
+    """Настоящая папка «Рабочий стол» / «Изображения» (учитывает OneDrive и перенос папок)."""
+    names = {"desktop": ("Desktop", "Desktop"), "pictures": ("My Pictures", "Pictures")}
+    reg_name, plain = names[kind]
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders") as key:
+            value, _ = winreg.QueryValueEx(key, reg_name)
+        path = os.path.expandvars(value)
+        if os.path.isdir(path):
+            return path
+    except Exception:
+        pass
+    return os.path.join(os.path.expanduser("~"), plain)
+
+
+# main.py ставит сюда пару (спрятать_окна, вернуть_окна), чтобы приложение не попало на свой же скриншот
+capture_hooks = None
+
+
+def save_screenshot(where: str = "desktop") -> str:
+    """Снимок экрана в PNG на рабочий стол или в «Изображения → Снимки экрана». Возвращает путь к файлу."""
+    folder = _user_folder(where)
+    if where == "pictures":
+        folder = os.path.join(folder, "Screenshots")
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, time.strftime("Скриншот %Y-%m-%d %H-%M-%S.png"))
+    hooks = capture_hooks
+    try:
+        if hooks:
+            hooks[0]()
+        time.sleep(0.4)
+        image = pyautogui.screenshot()
+    finally:
+        if hooks:
+            hooks[1]()
+    image.save(path)
+    log(f"Скриншот сохранён: {path}")
+    return path
+
+
 def type_text(text: str, sensitive: bool = False):
     if sensitive:
         log("Ввожу скрытый текст (похоже на пароль/личные данные) — содержимое не логируется")
@@ -248,6 +290,8 @@ def run_step(step: dict):
         scroll(args["amount"])
     elif action == "wait":
         wait(args["seconds"])
+    elif action == "save_screenshot":
+        save_screenshot(args["where"])
     elif action == "create_file":
         create_file(args["path"], args.get("content", ""))
     elif action == "move_file":
