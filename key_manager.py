@@ -27,6 +27,17 @@ _invalid = set()         # ключи, которые Google назвал нед
 _stamps = {}             # ключ -> времена наших запросов за последнюю минуту
 DEFAULT_COOLDOWN = 30
 
+# Лимиты Google считаются отдельно на КАЖДУЮ модель, поэтому паузы/счётчики ведём по моделям.
+_by_model = {}           # модель -> (cooldowns, stamps)
+_current_model = None
+
+
+def set_model(model: str):
+    """Переключает «светофор» на состояние данной модели (паузы ключей у каждой модели свои)."""
+    global _cooldowns, _stamps, _current_model
+    cool, stamps = _by_model.setdefault(model, ({}, {}))
+    _cooldowns, _stamps, _current_model = cool, stamps, model
+
 
 def get_keys() -> list:
     return [k.strip() for k in config.get("gemini_api_keys") if k.strip()]
@@ -145,7 +156,11 @@ def status_report() -> list:
 def all_daily_exhausted() -> bool:
     """True, если у ВСЕХ действующих ключей исчерпан дневной лимит (ждать придётся до сброса)."""
     live = [x for x in get_keys() if x not in _invalid]
-    return bool(live) and all(cooldown_remaining(x) > 3600 for x in live)
+    if not live:
+        return False
+    states = [c for c, _ in _by_model.values()] or [_cooldowns]
+    now = time.time()
+    return all(all(c.get(x, 0) - now > 3600 for x in live) for c in states)
 
 
 def _pacific_offset_hours(utc_dt) -> int:

@@ -754,6 +754,16 @@ class AppWindow:
         tk.Checkbutton(s, text="👁 Режим «только смотреть»: ИИ отвечает про экран, но ничего не нажимает и не печатает",
                        variable=sv["view_only"], bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG,
                        selectcolor=theme.INPUT_BG, font=_font(10)).pack(anchor="w", pady=(0, 8))
+        sv["use_fallback"] = tk.BooleanVar(master=self.root, value=bool(cur.get("use_fallback_models", True)))
+        tk.Checkbutton(s, text="🔁 При лимите основной модели пробовать запасные (у каждой модели свой бесплатный лимит)",
+                       variable=sv["use_fallback"], bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG,
+                       selectcolor=theme.INPUT_BG, font=_font(10)).pack(anchor="w", pady=(0, 4))
+        self._field_label(s, "Запасные модели (через запятую; доступные — кнопка «Найти доступные модели» в карточке Gemini)")
+        sv["fallback_models"] = tk.StringVar(master=self.root, value=", ".join(cur.get("fallback_models") or []))
+        self._entry(s, sv["fallback_models"], 44)
+        self._field_label(s, "Секунд до автозапуска простых команд (0 — всегда ждать клика)")
+        sv["auto_confirm"] = tk.StringVar(master=self.root, value=str(cur.get("auto_confirm_seconds", 5)))
+        self._entry(s, sv["auto_confirm"], 6)
         self._field_label(s, "Горячая клавиша быстрой команды (работает из любого места)")
         sv["hotkey"] = tk.StringVar(master=self.root, value=cur.get("hotkey_open_window", "ctrl+shift+a"))
         self._entry(s, sv["hotkey"], 24)
@@ -950,7 +960,13 @@ class AppWindow:
             "autostart": sv["autostart"].get(),
             "accent": sv["accent"].get(),
             "view_only": sv["view_only"].get(),
+            "use_fallback_models": sv["use_fallback"].get(),
+            "fallback_models": [m.strip() for m in re.split(r"[,;\s]+", sv["fallback_models"].get()) if m.strip()][:4],
         }
+        try:
+            values["auto_confirm_seconds"] = max(0, min(30, int(sv["auto_confirm"].get().strip() or "5")))
+        except ValueError:
+            values["auto_confirm_seconds"] = 5
         try:
             rpm = int(sv["rpm"].get().strip() or "6")
         except ValueError:

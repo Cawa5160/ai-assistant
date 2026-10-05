@@ -13,7 +13,7 @@ BASE_DIR = DATA_DIR  # рядом со скриптом (или рядом с .e
 SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
 LOG_FILE = os.path.join(BASE_DIR, "action_log.txt")
 
-APP_VERSION = "1.12.0"
+APP_VERSION = "1.13.0"
 SETTINGS_VERSION = 2  # растёт, когда меняются значения по умолчанию, которые нужно применить и старым установкам
 
 DEFAULTS = {
@@ -23,6 +23,8 @@ DEFAULTS = {
     "model": "gemini-3.5-flash",
     "agent_max_steps": 15,      # максимум шагов автопилота на одну задачу (каждый шаг = 1 запрос к ИИ)
     "requests_per_minute": 8,  # свой лимит запросов к Gemini в минуту на ключ (0 = без ограничения)
+    "use_fallback_models": True,   # при лимите основной модели пробовать запасные (лимит у каждой модели свой)
+    "fallback_models": ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
     "auto_confirm_seconds": 5,  # таймер автозапуска простых команд (0 — всегда ждать клика)
     "agent_step_delay": 0.6,    # пауза после действия, чтобы интерфейс успел обновиться, сек.
     "agent_thinking": "minimal",   # уровень "размышлений" Gemini 3.x для автопилота: minimal|low|medium|high ("" = по умолчанию)

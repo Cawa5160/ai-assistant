@@ -17,14 +17,26 @@ import time
 import requests
 
 import config
+import threading
 import key_manager
 from logger import log
 
 API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
 
 
+_active_model = None      # модель текущего запроса (основная или запасная)
+
+
+def _model() -> str:
+    return _active_model or config.get("model")
+
+
 def _gemini_url() -> str:
-    return f"{API_ROOT}/models/{config.get('model')}:generateContent"
+    return f"{API_ROOT}/models/{_model()}:generateContent"
+
+
+class LimitError(RuntimeError):
+    """Лимит/квота/недоступная модель — можно попробовать запасную модель."""
 
 
 def _error_info(response) -> tuple:
@@ -82,7 +94,7 @@ def _call_gemini(api_key: str, payload: dict):
     status, message = _error_info(response)
 
     if code == 404:
-        log(f"Gemini: модель '{config.get('model')}' не найдена: {message[:200]}")
+        log(f"Gemini: модель '{_model()}' не найдена: {message[:200]}")
         return None, "bad_model", ""
 
     # Ключ считаем недействительным ТОЛЬКО если об этом прямо сказано. Обычный 400
@@ -114,7 +126,7 @@ def _sleep(seconds: float, cancel, on_wait, why: str) -> bool:
 
 def _limit_message(count: int, reasons: dict) -> str:
     kinds = set(reasons.values())
-    model = config.get("model")
+    model = _model()
     if "no_quota" in kinds:
         return (f"У твоего ключа нет бесплатной квоты на модель «{model}» (Google отвечает «limit: 0»). "
                 "Открой Настройки → Gemini → «Найти доступные модели», выбери другую (например, flash-lite) "
@@ -131,7 +143,7 @@ def _limit_message(count: int, reasons: dict) -> str:
     return f"Не удалось получить ответ от Gemini ({count} ключ(а)). Проверь ключи и интернет в Настройках."
 
 
-def generate(payload: dict, on_wait=None, cancel=None, max_wait: float = 150.0) -> dict:
+def _generate_one(payload: dict, on_wait=None, cancel=None, max_wait: float = 150.0) -> dict:
     """
     Отправляет payload в Gemini. Возвращает JSON-ответ (dict).
     ValueError — ключей нет вообще; RuntimeError — не вышло (текст понятен пользователю).
@@ -168,8 +180,8 @@ def generate(payload: dict, on_wait=None, cancel=None, max_wait: float = 150.0) 
             key_manager.mark_ok(key)
             return response.json()
         if outcome == "bad_model":
-            raise RuntimeError(
-                f"Модель Gemini «{config.get('model')}» недоступна (Google мог её отключить или переименовать). "
+            raise LimitError(
+                f"Модель Gemini «{_model()}» недоступна (Google мог её отключить или переименовать). "
                 "Открой Настройки → Gemini → «Найти доступные модели» и выбери рабочую.")
         if outcome == "bad_params":
             raise RuntimeError(f"Gemini отклонил запрос: {kind}")
@@ -187,7 +199,62 @@ def generate(payload: dict, on_wait=None, cancel=None, max_wait: float = 150.0) 
             continue
         reasons[key] = kind if outcome == "rate_limited" and kind else outcome
 
-    raise RuntimeError(_limit_message(len(keys), reasons))
+    raise LimitError(_limit_message(len(keys), reasons))
+
+
+def _fallback_models() -> list:
+    if not config.get("use_fallback_models"):
+        return []
+    main = config.get("model")
+    out = []
+    for m in config.get("fallback_models") or []:
+        m = str(m).strip()
+        if m and m != main and m not in out:
+            out.append(m)
+    return out[:4]
+
+
+def _strip_thinking(payload: dict) -> dict:
+    """Для запасных моделей убираем thinkingConfig (у старых моделей другие параметры — иначе 400)."""
+    import copy
+    p = copy.deepcopy(payload)
+    p.get("generationConfig", {}).pop("thinkingConfig", None)
+    return p
+
+
+_gen_lock = threading.RLock()
+
+
+def generate(payload: dict, on_wait=None, cancel=None, max_wait: float = 150.0) -> dict:
+    """
+    Основная модель, а если на ней лимит (дневной/минутный/«limit: 0») или она недоступна —
+    запасные модели из Настроек (у каждой модели свой бесплатный лимит).
+    """
+    global _active_model
+    main = config.get("model")
+    chain = [main] + _fallback_models()
+    first_error = None
+    with _gen_lock:
+        try:
+            for i, model in enumerate(chain):
+                _active_model = model
+                key_manager.set_model(model)
+                last = i == len(chain) - 1
+                try:
+                    data = _generate_one(payload if i == 0 else _strip_thinking(payload), on_wait, cancel,
+                                         max_wait if last else min(max_wait, 8.0))
+                    if i > 0:
+                        log(f"Ответил запасной вариант: модель «{model}».")
+                    return data
+                except LimitError as e:
+                    first_error = first_error or e
+                    if not last:
+                        log(f"Модель «{model}»: {str(e)[:120]} — пробую запасную «{chain[i + 1]}».")
+                        continue
+                    raise first_error
+        finally:
+            _active_model = None
+            key_manager.set_model(main)
 
 
 def extract_text(data: dict):
