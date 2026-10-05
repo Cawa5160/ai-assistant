@@ -16,6 +16,7 @@ ALLOWED_ACTIONS = {
     "click": {"x": (int, float), "y": (int, float)},
     "double_click": {"x": (int, float), "y": (int, float)},
     "right_click": {"x": (int, float), "y": (int, float)},
+    "move_mouse": {"x": (int, float), "y": (int, float)},
     "scroll": {"amount": (int, float)},
     "wait": {"seconds": (int, float)},
     "save_screenshot": {"where": str},
@@ -34,14 +35,14 @@ OPTIONAL_ARGS = {
     "create_file": {"content": str},
 }
 
-POINTER_ACTIONS = ("click", "double_click", "right_click")
+POINTER_ACTIONS = ("click", "double_click", "right_click", "move_mouse")
 
 # Необратимые/файловые операции — НИКОГДА не уходят в авто-подтверждение,
 # всегда требуют явного "Я понимаю риск и разрешаю".
 HIGH_RISK_ACTIONS = {"create_file", "move_file"}
 
 # open_url обратим и низкий риск сам по себе (после строгой проверки ниже).
-LOW_RISK_ACTIONS = {"open_url", "save_screenshot"}
+LOW_RISK_ACTIONS = {"open_url", "save_screenshot", "move_mouse"}
 
 # open_app — низкий риск ТОЛЬКО для явно безопасных, общеизвестных программ;
 # остальное требует обычного клика (не "запрещено", а не авто-пропускается).

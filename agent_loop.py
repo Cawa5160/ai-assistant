@@ -48,6 +48,7 @@ AGENT_PROMPT = """Ты — автопилот, который по шагам у
 - open_app {"app_name": "chrome"}        — запустить программу (chrome, notepad, calc, explorer ...)
 - open_url {"url": "youtube.com"}        — открыть сайт в браузере
 - click / double_click / right_click {"x": 0..1000, "y": 0..1000}
+- move_mouse {"x": 0..1000, "y": 0..1000}   — только подвести курсор (наведение), без нажатия; для просьб «подвигай мышкой», «наведи на …»
 - type_text {"text": "...", "sensitive": false}   — ввести текст в поле, где сейчас курсор
 - press_key {"key": "enter"}  и  hotkey {"keys": ["ctrl", "l"]}
 - scroll {"amount": -5..5}      — щелчки колеса: положительное = вверх, отрицательное = вниз
@@ -86,7 +87,8 @@ def describe_step(step: dict) -> str:
     if action == "open_url":
         return f"Открыть сайт {a.get('url')}"
     if action in plan_validator.POINTER_ACTIONS:
-        name = {"click": "Нажать", "double_click": "Двойной клик", "right_click": "Правый клик"}[action]
+        name = {"click": "Нажать", "double_click": "Двойной клик", "right_click": "Правый клик",
+                "move_mouse": "Навести курсор"}[action]
         return f"{name} в точке экрана ({a.get('x')}, {a.get('y')})"
     if action == "type_text":
         if a.get("sensitive"):
@@ -412,8 +414,11 @@ def run_agent(goal: str, ui, first_decision=None):
                         "actions": "; ".join(describe_step(s) for s in current["steps"]),
                         "result": f"{'; '.join(results)}; {note}"})
 
-        still_streak = still_streak + 1 if (pointer_used and not changed) else 0
-        if still_streak >= 3:
+        only_moves = all(st["action"] == "move_mouse" for st in current["steps"])
+        still_streak = still_streak + 1 if (pointer_used and not changed and not only_moves) else 0
+        # Проверки/тесты («кликни по пустому месту») по смыслу не меняют экран — не считаем это поломкой
+        testing = any(w in (goal or "").lower() for w in ("пуст", "тест", "случайн", "провер", "подвиг", "двига"))
+        if still_streak >= 3 and not testing:
             return False, "Экран не реагирует на действия три раза подряд — остановил, чтобы не кликать вслепую."
 
         if current["status"] == "done":

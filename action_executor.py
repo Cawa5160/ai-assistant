@@ -87,6 +87,19 @@ def _mouse_click(x: int, y: int, button: str = "left", clicks: int = 1):
         pyautogui.click(x, y)
 
 
+def move_mouse(x: int, y: int):
+    """Просто подвести курсор (наведение), без нажатия."""
+    log(f"Курсор -> ({x}, {y})")
+    try:
+        import mouse
+        if mouse.AVAILABLE:
+            mouse.move_to(x, y, 0.4)
+            return
+    except Exception as e:
+        log(f"Мышь (ctypes) не сработала, использую pyautogui: {e}")
+    pyautogui.moveTo(x, y, duration=0.4)
+
+
 def click(x: int, y: int):
     log(f"Клик по координатам ({x}, {y})")
     _mouse_click(x, y)
@@ -305,6 +318,8 @@ def run_step(step: dict):
         double_click(int(args["x"]), int(args["y"]))
     elif action == "right_click":
         right_click(int(args["x"]), int(args["y"]))
+    elif action == "move_mouse":
+        move_mouse(int(args["x"]), int(args["y"]))
     elif action == "type_text":
         type_text(args["text"], bool(args.get("sensitive", False)))
     elif action == "press_key":
