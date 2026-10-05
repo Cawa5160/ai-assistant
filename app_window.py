@@ -972,7 +972,7 @@ class AppWindow:
 
         s = self._section(tab, "Управление из Telegram", (
             "Необязательно. Ты пишешь своему боту — ассистент выполняет команду на этом компьютере. "
-            "Команды из Telegram никогда не запускаются сами: на компьютере всегда нужно нажать «Разрешить»."))
+            "Команды из Telegram никогда не запускаются сами: нужно нажать «Разрешить» — в чате или на компьютере."))
         tk.Label(s, text=("Как создать бота (1 минута):\n"
                           "1. В Telegram открой @BotFather и отправь /newbot\n"
                           "2. Придумай имя и логин бота (логин оканчивается на bot)\n"
@@ -985,6 +985,10 @@ class AppWindow:
         tk.Checkbutton(s, text="Включить управление из Telegram", variable=sv["tg_enabled"], bg=theme.CARD_BG,
                        fg=theme.TEXT, activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
                        font=_font(10)).pack(anchor="w")
+        sv["tg_approve"] = tk.BooleanVar(master=self.root, value=bool(cur.get("telegram_approve_in_chat", True)))
+        tk.Checkbutton(s, text="Подтверждать обычные действия кнопками прямо в Telegram (опасные — только на компьютере)",
+                       variable=sv["tg_approve"], bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG,
+                       selectcolor=theme.INPUT_BG, font=_font(10), wraplength=640, justify="left").pack(anchor="w")
         has_token = bool(telegram_bot.get_token())
         self._field_label(s, "Токен бота" + (" (сохранён — оставь пустым, чтобы не менять)" if has_token else ""))
         sv["tg_token"] = tk.StringVar(master=self.root, value="")
@@ -1205,6 +1209,7 @@ class AppWindow:
             "accent": sv["accent"].get(),
             "view_only": sv["view_only"].get(),
             "telegram_enabled": sv["tg_enabled"].get(),
+            "telegram_approve_in_chat": sv["tg_approve"].get(),
             "telegram_token": sv["tg_token"].get().strip(),
             "telegram_clear_token": sv["tg_clear"].get(),
             "use_fallback_models": sv["use_fallback"].get(),

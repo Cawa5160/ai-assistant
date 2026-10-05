@@ -166,7 +166,14 @@ def _run_local_plan(user_command: str, plan: dict) -> str:
             auto = max(0, min(30, int(config.get("auto_confirm_seconds"))))
         except Exception:
             auto = 0
-    confirmed_steps = gui.confirm_plan(display_summary, steps, auto_seconds=auto, manual=_is_remote())
+    chat_answer = _approve_in_chat(summary, steps, dangerous)
+    if chat_answer is True:
+        confirmed_steps = steps
+    elif chat_answer is False or (chat_answer is None and _is_remote() and config.get("telegram_approve_in_chat")
+                                  and not dangerous and plan_validator.highest_risk(steps) != "high"):
+        confirmed_steps = None            # отказ или время вышло в Telegram
+    else:
+        confirmed_steps = gui.confirm_plan(display_summary, steps, auto_seconds=auto, manual=_is_remote())
     if confirmed_steps is None:
         log("Пользователь отменил выполнение плана.")
         history.add(user_command, summary, "отменено пользователем")
@@ -285,7 +292,18 @@ def _run_agent_visible(user_command: str, on_wait) -> str:
     )
     max_steps = int(config.get("agent_max_steps"))
 
-    if not gui.confirm_agent_start(user_command, intent, steps_text, max_steps, auto_seconds=3 if (trivial and not _is_remote()) else 0):
+    chat_ok = _approve_in_chat(f"Цель: {user_command}\nАвтопилот сам будет смотреть на экран и действовать (до {max_steps} шагов). "
+                               "Опасные шаги он спросит отдельно, на компьютере.\n\nНачнёт так:\n" + "\n".join(steps_text),
+                               decision["steps"], False, "Запустить автопилот?")
+    if chat_ok is None and _is_remote() and config.get("telegram_approve_in_chat") and \
+            not any(plan_validator.classify_risk(st) == "high" for st in decision["steps"]):
+        chat_ok = False
+    if chat_ok is not None:
+        start_ok = chat_ok
+    else:
+        start_ok = gui.confirm_agent_start(user_command, intent, steps_text, max_steps,
+                                           auto_seconds=3 if (trivial and not _is_remote()) else 0)
+    if not start_ok:
         log("Пользователь отменил запуск автопилота.")
         history.add(user_command, intent, "отменено пользователем")
         return "ok"
@@ -380,10 +398,27 @@ def _is_remote() -> bool:
     return bool(getattr(_remote, "on", False))
 
 
+def _approve_in_chat(summary: str, steps: list, dangerous: bool, title: str = "Подтверди действия"):
+    """Команда пришла из Telegram: обычные действия подтверждаем кнопками в чате. -> True/False или None (нужно окно на ПК)."""
+    if not (_is_remote() and config.get("telegram_approve_in_chat")):
+        return None
+    if dangerous or any(plan_validator.classify_risk(st) == "high" for st in steps):
+        telegram_bot._send(_remote.uid, "⚠️ В плане есть действия с высоким риском (файлы, установка, удаление) — "
+                                        "подтверди их на компьютере.")
+        return None
+    lines = []
+    for i, st in enumerate(steps[:12], 1):
+        lines.append(f"{i}. {redact(agent_loop.describe_step(st))}")
+    more = f"\n…и ещё {len(steps) - 12}" if len(steps) > 12 else ""
+    text = f"{title}\n\n{redact(summary)}\n\n" + "\n".join(lines) + more
+    return telegram_bot.ask_approval(_remote.uid, text)
+
+
 def on_telegram_command(text: str, user_id, user_name) -> str:
     """Выполняет команду из Telegram (подтверждение — на компьютере) и возвращает короткий итог для чата."""
     started = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - 1))
     _remote.on = True
+    _remote.uid = user_id
     try:
         process_command(text)
     finally:
@@ -515,6 +550,7 @@ def apply_settings(values: dict):
         "fallback_models": values.get("fallback_models", ["gemini-2.5-flash", "gemini-2.5-flash-lite"]),
         "auto_confirm_seconds": values.get("auto_confirm_seconds", 5),
         "telegram_enabled": bool(values.get("telegram_enabled", False)),
+        "telegram_approve_in_chat": bool(values.get("telegram_approve_in_chat", True)),
         "hotkey_open_window": values["hotkey_open_window"],
         "hotkey_voice": values.get("hotkey_voice", "ctrl+shift+v"),
         "hotkey_stop": values.get("hotkey_stop", "ctrl+shift+s"),

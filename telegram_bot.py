@@ -6,8 +6,9 @@
   * новому пользователю программа генерирует одноразовый код из 16 символов (живёт 10 минут) и показывает
     его в чате; чтобы получить доступ, владелец должен в ПРОГРАММЕ (Настройки → Telegram) ввести этот код —
     значит, подтверждает человек, сидящий за компьютером;
-  * команды из Telegram НИКОГДА не запускаются сами: на компьютере всегда нужен клик «Разрешить»
-    (таймеры автозапуска для них отключены), опасные действия — как обычно с усиленным подтверждением;
+  * команды из Telegram НИКОГДА не запускаются сами: нужно нажать «Разрешить» — кнопкой в чате (для обычных
+    действий, если включено в настройках) или на компьютере; опасные действия (файлы, установка, удаление) —
+    ТОЛЬКО на компьютере;
   * токен бота хранится в защищённом хранилище Windows (если оно есть);
   * в самом чате пароли и ключи маскируются (privacy.redact), экран бот присылает только по команде /screen.
 Работает на обычных HTTPS-запросах (long polling), без дополнительных библиотек.
@@ -40,6 +41,7 @@ _msg_times = {}      # user_id -> [время сообщений за час] (�
 _thread = None
 _stop = threading.Event()      # у каждого запуска свой Event (см. start)
 _state = {"running": False, "bot": "", "error": ""}
+_approvals = {}      # токен кнопки -> {"uid","event","result"} (ожидание ответа «Разрешить/Отмена»)
 _on_command = None   # callable(text, user_id, user_name) — выполняет команду на компьютере
 
 
@@ -194,6 +196,56 @@ def _send_photo(chat_id, image):
         _send(chat_id, "Не получилось отправить скриншот.")
 
 
+def ask_approval(uid, text: str, timeout: int = 180):
+    """Присылает сообщение с кнопками «Разрешить / Отмена» и ждёт ответа. -> True / False / None (время вышло)."""
+    tok = secrets.token_hex(5)
+    ev = threading.Event()
+    with _lock:
+        _approvals[tok] = {"uid": uid, "event": ev, "result": None}
+    markup = {"inline_keyboard": [[{"text": "✅ Разрешить", "callback_data": f"ok:{tok}"},
+                                   {"text": "❌ Отмена", "callback_data": f"no:{tok}"}]]}
+    mid = None
+    try:
+        r = _call("sendMessage", http_timeout=15, chat_id=uid, text=text[:3500], reply_markup=markup)
+        mid = (r.get("result") or {}).get("message_id")
+    except Exception as e:
+        log(f"Telegram: не отправились кнопки подтверждения: {e}")
+        with _lock:
+            _approvals.pop(tok, None)
+        return None
+    ev.wait(timeout)
+    with _lock:
+        result = (_approvals.pop(tok, None) or {}).get("result")
+    if mid is not None:
+        try:
+            _call("editMessageReplyMarkup", http_timeout=10, chat_id=uid, message_id=mid,
+                  reply_markup={"inline_keyboard": []})
+        except Exception:
+            pass
+    if result is None:
+        _send(uid, "⌛ Время на подтверждение вышло — действие отменено.")
+    return result
+
+
+def _handle_callback(cb: dict):
+    """Нажатие кнопки «Разрешить/Отмена» — принимается только от подтверждённого пользователя, которому адресован запрос."""
+    uid = (cb.get("from") or {}).get("id")
+    data = str(cb.get("data") or "")
+    answer = "Принято"
+    action, _, tok = data.partition(":")
+    with _lock:
+        ap = _approvals.get(tok)
+        if uid is None or not is_allowed(uid) or ap is None or ap["uid"] != uid or action not in ("ok", "no"):
+            answer = "Запрос устарел или недоступен"
+        else:
+            ap["result"] = action == "ok"
+            ap["event"].set()
+    try:
+        _call("answerCallbackQuery", http_timeout=10, callback_query_id=cb.get("id"), text=answer)
+    except Exception:
+        pass
+
+
 def check_token(token: str):
     """-> (ok, имя бота или текст ошибки)."""
     try:
@@ -246,7 +298,12 @@ def _handle(msg: dict):
                     "ассистенту (например: «открой блокнот и напиши привет»). На компьютере нужно будет нажать "
                     "«Разрешить» — сам по себе он ничего не запускает.")
         return
-    if text.startswith("/screen"):
+    try:
+        from quick_commands import _SCREENSHOT
+        wants_screen = bool(_SCREENSHOT.match(text))
+    except Exception:
+        wants_screen = False
+    if text.startswith("/screen") or wants_screen:
         try:
             import screen_utils
             _send_photo(chat, screen_utils.take_screenshot_image())
@@ -279,7 +336,7 @@ def _loop(stop):
             stop.wait(5)
             continue
         try:
-            params = {"timeout": 25, "allowed_updates": ["message"]}
+            params = {"timeout": 25, "allowed_updates": ["message", "callback_query"]}
             if offset is not None:
                 params["offset"] = offset
             r = _call("getUpdates", token=token, http_timeout=40, **params)
@@ -289,11 +346,13 @@ def _loop(stop):
             fails = 0
             for upd in r.get("result", []):
                 offset = upd["update_id"] + 1
-                if "message" in upd:
-                    try:
+                try:
+                    if "message" in upd:
                         _handle(upd["message"])
-                    except Exception as e:
-                        log(f"Telegram: ошибка обработки сообщения: {e}")
+                    elif "callback_query" in upd:
+                        _handle_callback(upd["callback_query"])
+                except Exception as e:
+                    log(f"Telegram: ошибка обработки сообщения: {e}")
         except Exception as e:
             fails += 1
             _state["error"] = str(e)[:120]
