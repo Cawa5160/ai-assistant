@@ -16,6 +16,7 @@
 import io
 import json
 import os
+import re
 import secrets
 import threading
 import time
@@ -184,16 +185,29 @@ def _send(chat_id, text: str):
         log(f"Telegram: не отправилось сообщение: {e}")
 
 
-def _send_photo(chat_id, image):
+def _send_photo(chat_id, image) -> bool:
     try:
         buf = io.BytesIO()
-        image.convert("RGB").save(buf, "JPEG", quality=70)
+        image.convert("RGB").save(buf, "JPEG", quality=80)
         buf.seek(0)
-        requests.post(f"{API}/bot{get_token()}/sendPhoto", data={"chat_id": chat_id},
-                      files={"photo": ("screen.jpg", buf, "image/jpeg")}, timeout=40)
+        r = requests.post(f"{API}/bot{get_token()}/sendPhoto", data={"chat_id": chat_id},
+                          files={"photo": ("screen.jpg", buf, "image/jpeg")}, timeout=60)
+        j = r.json()
+        if not j.get("ok"):
+            raise RuntimeError(str(j.get("description", r.status_code)))
+        return True
     except Exception as e:
         log(f"Telegram: не отправился скриншот: {e}")
-        _send(chat_id, "Не получилось отправить скриншот.")
+        _send(chat_id, f"Не получилось отправить скриншот: {str(e)[:200]}")
+        return False
+
+
+_SCREEN_WORDS = re.compile(r"скрин|screenshot|screen\b|снимок экрана|знімок екрана|что на экране|що на екрані", re.I)
+
+
+def _wants_screen(text: str) -> bool:
+    t = text.strip()
+    return t.startswith("/screen") or (len(t) <= 80 and bool(_SCREEN_WORDS.search(t)))
 
 
 def ask_approval(uid, text: str, timeout: int = 180):
@@ -298,16 +312,12 @@ def _handle(msg: dict):
                     "ассистенту (например: «открой блокнот и напиши привет»). На компьютере нужно будет нажать "
                     "«Разрешить» — сам по себе он ничего не запускает.")
         return
-    try:
-        from quick_commands import _SCREENSHOT
-        wants_screen = bool(_SCREENSHOT.match(text))
-    except Exception:
-        wants_screen = False
-    if text.startswith("/screen") or wants_screen:
+    if _wants_screen(text):
         try:
             import screen_utils
-            _send_photo(chat, screen_utils.take_screenshot_image())
+            _send_photo(chat, screen_utils.take_screenshot_color())
         except Exception as e:
+            log(f"Telegram: скриншот не сделан: {e}")
             _send(chat, f"Не удалось сделать скриншот: {e}")
         return
     if _on_command is None:

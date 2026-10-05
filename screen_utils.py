@@ -43,6 +43,14 @@ def take_screenshot_image(max_width: int = 400) -> Image.Image:
     return screenshot.convert("L")
 
 
+def take_screenshot_color(max_width: int = 1600) -> Image.Image:
+    """Цветной скриншот для отправки человеку (в Telegram)."""
+    shot = pyautogui.screenshot()
+    if shot.width > max_width:
+        shot = shot.resize((max_width, int(shot.height * max_width / shot.width)), Image.LANCZOS)
+    return shot.convert("RGB")
+
+
 def get_screen_size():
     """(ширина, высота) основного экрана в тех же координатах, в которых кликает pyautogui."""
     size = pyautogui.size()
