@@ -158,7 +158,13 @@ def _run_local_plan(user_command: str, plan: dict) -> str:
     )
     display_summary = ("⚠️ ВНИМАНИЕ, ПОТЕНЦИАЛЬНО РИСКОВАННОЕ ДЕЙСТВИЕ ⚠️\n\n" + summary) if dangerous else summary
 
-    confirmed_steps = gui.confirm_plan(display_summary, steps)
+    auto = 0
+    if plan.get("trusted") and not dangerous:
+        try:
+            auto = max(0, min(30, int(config.get("auto_confirm_seconds"))))
+        except Exception:
+            auto = 0
+    confirmed_steps = gui.confirm_plan(display_summary, steps, auto_seconds=auto)
     if confirmed_steps is None:
         log("Пользователь отменил выполнение плана.")
         history.add(user_command, summary, "отменено пользователем")

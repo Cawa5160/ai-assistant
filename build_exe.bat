@@ -39,6 +39,8 @@ python -m PyInstaller --noconfirm --clean --onefile --noconsole ^
   --collect-data speech_recognition ^
   --hidden-import sounddevice ^
   --collect-all uiautomation ^
+  --collect-all comtypes ^
+  --hidden-import winotify ^
   --collect-all sounddevice ^
   --collect-all _sounddevice_data ^
   main.py

@@ -109,7 +109,7 @@ def ask_command() -> str:
 # ---------- подтверждение обычного плана ----------
 
 @on_ui
-def confirm_plan(summary: str, steps: list, screenshot_b64=None):
+def confirm_plan(summary: str, steps: list, screenshot_b64=None, auto_seconds: int = 0):
     """
     Показывает план (от локальной модели) с галочкой на каждом шаге.
     Возвращает None при отмене, иначе — список шагов, у которых галочка осталась.
@@ -204,8 +204,9 @@ def confirm_plan(summary: str, steps: list, screenshot_b64=None):
                   relief="flat", width=28, command=on_yes).pack(side="left", padx=10)
         tk.Button(btn_frame, text="❌ Отмена", bg=theme.NEUTRAL, fg="white", font=bold,
                   relief="flat", width=15, command=on_no).pack(side="left", padx=10)
-    elif risk == "low":
-        countdown = {"n": 3}
+    elif risk == "low" or (risk == "normal" and auto_seconds > 0):
+        countdown = {"n": auto_seconds if auto_seconds > 0 else 3}
+        auto_label = "🟢 Безопасные действия" if risk == "low" else "⏱ Простая команда"
 
         def tick():
             if not _exists(win):
@@ -213,7 +214,7 @@ def confirm_plan(summary: str, steps: list, screenshot_b64=None):
             if countdown["n"] <= 0:
                 on_yes()
                 return
-            status_label.config(text=f"🟢 Безопасные действия — выполнится само через {countdown['n']}…")
+            status_label.config(text=f"{auto_label} — выполнится само через {countdown['n']} с… (Отмена — остановить)")
             countdown["n"] -= 1
             win.after(1000, tick)
 

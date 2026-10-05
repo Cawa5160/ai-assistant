@@ -57,8 +57,9 @@ _SHOW_DESKTOP = re.compile(r"^\s*(?:покажи рабочий стол|све�
 _CLOSE_WINDOW = re.compile(r"^\s*(?:закрой|закрыть)\s+(?:это\s+|текущее\s+)?окно\s*[.!]*\s*$", re.I)
 
 
-def _plan(summary, steps):
-    return {"summary": summary, "steps": steps, "need_vision": False}
+def _plan(summary, steps, trusted=True):
+    # trusted=True — шаблонная команда без ИИ: можно выполнить после короткого таймера
+    return {"summary": summary, "steps": steps, "need_vision": False, "trusted": trusted}
 
 
 def _simple_plan(command: str):
@@ -87,7 +88,7 @@ def _simple_plan(command: str):
     if _SHOW_DESKTOP.match(command):
         return _plan("Показать рабочий стол (Win+D)", [{"action": "hotkey", "args": {"keys": ["win", "d"]}}])
     if _CLOSE_WINDOW.match(command):
-        return _plan("Закрыть текущее окно (Alt+F4)", [{"action": "hotkey", "args": {"keys": ["alt", "f4"]}}])
+        return _plan("Закрыть текущее окно (Alt+F4)", [{"action": "hotkey", "args": {"keys": ["alt", "f4"]}}], trusted=False)
     if _VOL_UP.match(command):
         return _plan("Сделать звук громче", [{"action": "press_key", "args": {"key": "volumeup"}}] * 5)
     if _VOL_DOWN.match(command):
@@ -114,4 +115,4 @@ def try_quick_plan(command: str):
         steps += [{"action": "wait", "args": {"seconds": 2.5}},
                   {"action": "type_text", "args": {"text": text}}]
         summary += f" и напечатать: {text[:60]}"
-    return {"summary": summary, "steps": steps, "need_vision": False}
+    return {"summary": summary, "steps": steps, "need_vision": False, "trusted": True}
