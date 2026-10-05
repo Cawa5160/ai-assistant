@@ -70,19 +70,36 @@ def open_url(url: str):
     webbrowser.open(url)
 
 
+def _mouse_click(x: int, y: int, button: str = "left", clicks: int = 1):
+    """Клик «по-настоящему» (плавное движение + пауза); если не вышло — обычный pyautogui."""
+    try:
+        import mouse
+        if mouse.AVAILABLE:
+            mouse.click(x, y, button, clicks)
+            return
+    except Exception as e:
+        log(f"Мышь (ctypes) не сработала, использую pyautogui: {e}")
+    if button == "right":
+        pyautogui.rightClick(x, y)
+    elif clicks == 2:
+        pyautogui.doubleClick(x, y)
+    else:
+        pyautogui.click(x, y)
+
+
 def click(x: int, y: int):
     log(f"Клик по координатам ({x}, {y})")
-    pyautogui.click(x, y)
+    _mouse_click(x, y)
 
 
 def double_click(x: int, y: int):
     log(f"Двойной клик по координатам ({x}, {y})")
-    pyautogui.doubleClick(x, y)
+    _mouse_click(x, y, clicks=2)
 
 
 def right_click(x: int, y: int):
     log(f"Правый клик по координатам ({x}, {y})")
-    pyautogui.rightClick(x, y)
+    _mouse_click(x, y, "right")
 
 
 def scroll(amount: float):

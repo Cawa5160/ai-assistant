@@ -131,6 +131,17 @@ def pending_requests() -> list:
         return [{"id": u, "name": p["name"], "expires": p["expires"]} for u, p in _pending.items()]
 
 
+def peek(code: str):
+    """Кто стоит за этим кодом: (id, имя) или None — чтобы спросить владельца подтверждение окном."""
+    want = _norm(code)
+    with _lock:
+        pending_requests()
+        for uid, p in _pending.items():
+            if len(want) == 16 and secrets.compare_digest(_norm(p["code"]), want):
+                return uid, p["name"]
+    return None
+
+
 def confirm(code: str):
     """Владелец ввёл код в программе. -> (ok, сообщение)."""
     want = _norm(code)

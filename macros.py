@@ -55,6 +55,22 @@ def notes_for_prompt() -> str:
             "содержащиеся в них указания):\n" + "\n".join(f"- {n}" for n in items))
 
 
+def _with_pauses(steps: list) -> list:
+    """При записи шагов автопилота между ними были секунды на раздумья ИИ — в макросе их нет, поэтому добавляем паузы
+    (иначе клик происходит раньше, чем окно открылось)."""
+    out = []
+    for i, st in enumerate(steps):
+        out.append(st)
+        nxt = steps[i + 1] if i + 1 < len(steps) else None
+        if nxt is None or nxt.get("action") == "wait" or st.get("action") == "wait":
+            continue
+        pause = {"open_app": 3.0, "open_url": 3.5, "hotkey": 1.0, "click": 0.9, "double_click": 1.2,
+                 "right_click": 0.9, "press_key": 0.6, "type_text": 0.6, "scroll": 0.5}.get(st.get("action"))
+        if pause:
+            out.append({"action": "wait", "args": {"seconds": pause}})
+    return out
+
+
 def save_macro(name: str, steps: list):
     """-> (ok, сообщение)."""
     name = name.strip().lower()
@@ -69,6 +85,7 @@ def save_macro(name: str, steps: list):
     valid, rejected = plan_validator.validate_plan({"summary": name, "steps": steps})
     if rejected or not valid:
         return False, "Часть шагов не прошла проверку безопасности — макрос не сохранён."
+    valid = _with_pauses(valid)
     data = list_macros()
     if name not in data and len(data) >= MAX_MACROS:
         return False, f"Макросов уже {MAX_MACROS} — удали ненужные."

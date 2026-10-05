@@ -12,6 +12,7 @@ ui_thread.post — интерфейс не подвисает.
 import os
 import re
 import threading
+import time
 import tkinter as tk
 from tkinter import scrolledtext
 
@@ -1052,6 +1053,15 @@ class AppWindow:
             self._tg_status.config(text="Статус: " + telegram_bot.status())
 
         def do_confirm():
+            who = telegram_bot.peek(code_var.get())
+            if who is not None:
+                import gui
+                if not gui.ask_yes_no("Выдать доступ из Telegram?",
+                                      f"Пользователь Telegram «{who[1]}» (id {who[0]}) сможет присылать команды этому "
+                                      "компьютеру (каждую — с подтверждением) и запрашивать скриншот экрана.\n\n"
+                                      "Выдавай доступ только тому, кого знаешь.", "Да, выдать", "Нет"):
+                    self._tg_msg.config(text="Отменено — доступ не выдан.", fg=theme.TEXT_MUTED)
+                    return
             ok, msg = telegram_bot.confirm(code_var.get())
             self._tg_msg.config(text=("✓ " if ok else "✗ ") + msg, fg=theme.SUCCESS if ok else theme.DANGER)
             if ok:
@@ -1251,6 +1261,7 @@ class AppWindow:
         _button(head, "🧾 Журнал действий", self._open_audit, "neutral", small=True).pack(side="left")
         _button(head, "↻ Проверить снова", self.refresh, "neutral", small=True).pack(side="left", padx=8)
         _button(head, "📋 Копировать", self._copy_diag, "neutral", small=True).pack(side="left")
+        _button(head, "🖱 Тест мыши", self._mouse_test, "primary", small=True).pack(side="left", padx=8)
         self._diag_box = scrolledtext.ScrolledText(page, font=theme.FONT_MONO, wrap="word", bd=0, relief="flat",
                                                    bg=theme.CARD_BG, fg=theme.TEXT, highlightthickness=1,
                                                    highlightbackground=theme.BORDER, padx=10, pady=8)
@@ -1271,6 +1282,70 @@ class AppWindow:
         text = "\n".join(f"{'✅' if ok else '❌'} {label}: {detail}" for label, ok, detail in results)
         text += "\n\n──────── Журнал приложения (последние записи) ────────\n" + _log_tail(45)
         ui_thread.post(self._set_text, self._diag_box, text)
+
+    def _mouse_test(self):
+        """Двигает курсор по экрану и кликает по своей кнопке — показывает, где именно ломается управление мышью."""
+        self._set_text(self._diag_box, "Тест мыши: не трогай мышь ~10 секунд…")
+        threading.Thread(target=self._run_mouse_test, daemon=True).start()
+
+    def _run_mouse_test(self):
+        import mouse
+        lines = []
+        try:
+            if not mouse.AVAILABLE:
+                ui_thread.post(self._set_text, self._diag_box, "Тест мыши работает только в Windows.")
+                return
+            info = mouse.screen_info()
+            import pyautogui
+            pw, ph = pyautogui.size()
+            scale = round(info.get("dpi", 96) / 96 * 100)
+            lines.append(f"Экран: {info.get('w')}×{info.get('h')} (pyautogui видит {pw}×{ph}), масштаб Windows ≈ {scale}%")
+            if (info.get("w"), info.get("h")) != (pw, ph):
+                lines.append("⚠️ Размеры не совпадают — координаты будут сдвинуты (проблема масштаба).")
+            w, h = info.get("w", pw), info.get("h", ph)
+            bad = 0
+            for name, (x, y) in {"центр": (w // 2, h // 2), "левый верх": (80, 80), "правый верх": (w - 80, 80),
+                                 "правый низ": (w - 80, h - 80), "левый низ": (80, h - 80)}.items():
+                ax, ay = mouse.move_to(x, y)
+                ok = abs(ax - x) <= 2 and abs(ay - y) <= 2
+                bad += 0 if ok else 1
+                lines.append(f"{'✅' if ok else '❌'} Движение: {name} — нужно ({x}, {y}), курсор в ({ax}, {ay})")
+            # клик по собственной кнопке
+            box = {}
+
+            def make():
+                win = tk.Toplevel(self.root)
+                win.title("Тест клика")
+                win.attributes("-topmost", True)
+                win.geometry("260x120+300+300")
+                hit = {"n": 0}
+
+                def pressed():
+                    hit["n"] += 1
+                btn = tk.Button(win, text="Нажми меня", command=pressed, font=_font(12, True))
+                btn.pack(expand=True, fill="both", padx=20, pady=20)
+                win.update()
+                box.update(win=win, btn=btn, hit=hit)
+                return btn.winfo_rootx() + btn.winfo_width() // 2, btn.winfo_rooty() + btn.winfo_height() // 2
+
+            cx, cy = ui_thread.call(make)
+            time.sleep(0.5)
+            mouse.click(cx, cy)
+            time.sleep(0.6)
+            clicked = box["hit"]["n"] > 0
+            ui_thread.call(box["win"].destroy)
+            lines.append(f"{'✅' if clicked else '❌'} Клик по кнопке в своём окне: {'сработал' if clicked else 'НЕ сработал'}")
+            if bad == 0 and clicked:
+                lines.append("\nМышь управляется нормально. Если в каком-то приложении клики всё равно не работают — оно, "
+                             "скорее всего, запущено от имени администратора (Windows не пускает клики от обычной "
+                             "программы в такие окна). Для проверки запусти AI Ассистент от имени администратора.")
+            elif bad:
+                lines.append("\nКурсор не попадает в нужные точки — пришли этот текст, разберусь с масштабом.")
+            else:
+                lines.append("\nКурсор двигается, но клик не срабатывает — пришли этот текст.")
+        except Exception as e:
+            lines.append(f"Ошибка теста: {e}")
+        ui_thread.post(self._set_text, self._diag_box, "\n".join(lines))
 
     def _copy_diag(self):
         try:
