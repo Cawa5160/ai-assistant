@@ -123,7 +123,8 @@ def style_window(root):
             "*Text.insertBackground": p["TEXT"],
         }
         opts.update({"*Button.relief": "flat", "*Button.borderWidth": 0, "*Button.padX": 10,
-                     "*Button.padY": 5, "*Button.activeForeground": "white"})
+                     "*Button.padY": 5,
+                     "*Checkbutton.highlightThickness": 0, "*Radiobutton.highlightThickness": 0, "*Button.activeForeground": "white"})
         for key, value in opts.items():
             root.option_add(key, value)
         install_button_effects(root)

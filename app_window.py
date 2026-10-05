@@ -809,9 +809,37 @@ class AppWindow:
 
         sv = self._sv = {}
 
+        # ---- вкладки внутри Настроек ----
+        tab_defs = [("ai", "🤖  ИИ"), ("look", "🎨  Внешний вид"), ("ctrl", "🕹  Управление"),
+                    ("voice", "🎙  Голос"), ("sys", "⚙  Запуск")]
+        tabbar = tk.Frame(body, bg=theme.BG)
+        tabbar.pack(fill="x", pady=(14, 0))
+        holder = tk.Frame(body, bg=theme.BG)
+        holder.pack(fill="x")
+        tabs, tab_buttons = {}, {}
+
+        def show_tab(key):
+            for k, f in tabs.items():
+                f.pack_forget()
+            tabs[key].pack(fill="x")
+            for k, btn in tab_buttons.items():
+                active = k == key
+                btn.config(bg=theme.PRIMARY if active else theme.CARD_BG,
+                           fg="#FFFFFF" if active else theme.TEXT)
+                btn._base_bg = btn.cget("bg")
+            self._settings_tab = key
+
+        for key, label in tab_defs:
+            tabs[key] = tk.Frame(holder, bg=theme.BG)
+            btn = tk.Button(tabbar, text=label, font=_font(10, True), relief="flat", bd=0, padx=14, pady=7,
+                            cursor="hand2", highlightthickness=1, highlightbackground=theme.BORDER,
+                            command=lambda k=key: show_tab(k))
+            btn.pack(side="left", padx=(0, 6))
+            tab_buttons[key] = btn
+
         secure = ("🔒 Ключи хранятся в защищённом хранилище Windows." if secure_store.is_available()
                   else "⚠️ Защищённое хранилище недоступно — ключи будут лежать в обычном файле settings.json.")
-        s = self._section(body, "Gemini (ИИ)", secure)
+        s = self._section(tabs["ai"], "Gemini (ИИ)", secure)
         self._field_label(s, "Ключи Gemini — по одному на строку (можно с разных аккаунтов, при лимите ключи меняются сами)")
         self._s_keys = self._text_box(s, 4, "\n".join(cur.get("gemini_api_keys", [])))
         row = tk.Frame(s, bg=theme.CARD_BG)
@@ -834,7 +862,7 @@ class AppWindow:
         sv["rpm"] = tk.StringVar(master=self.root, value=str(cur.get("requests_per_minute", 6)))
         self._entry(s, sv["rpm"], 6)
 
-        s = self._section(body, "Внешний вид")
+        s = self._section(tabs["look"], "Внешний вид")
         sv["theme"] = tk.StringVar(master=self.root, value=cur.get("theme", "light"))
         row = tk.Frame(s, bg=theme.CARD_BG)
         row.pack(anchor="w")
@@ -852,15 +880,15 @@ class AppWindow:
                            activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
                            font=_font(10)).pack(side="left", padx=(0, 14))
 
-        s = self._section(body, "Управление")
+        s = self._section(tabs["ctrl"], "Управление")
         sv["view_only"] = tk.BooleanVar(master=self.root, value=bool(cur.get("view_only", False)))
         tk.Checkbutton(s, text="👁 Режим «только смотреть»: ИИ отвечает про экран, но ничего не нажимает и не печатает",
                        variable=sv["view_only"], bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG,
-                       selectcolor=theme.INPUT_BG, font=_font(10)).pack(anchor="w", pady=(0, 8))
+                       selectcolor=theme.INPUT_BG, font=_font(10), wraplength=640, justify="left").pack(anchor="w", pady=(0, 8))
         sv["use_fallback"] = tk.BooleanVar(master=self.root, value=bool(cur.get("use_fallback_models", True)))
         tk.Checkbutton(s, text="🔁 При лимите основной модели пробовать запасные (у каждой модели свой бесплатный лимит)",
                        variable=sv["use_fallback"], bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG,
-                       selectcolor=theme.INPUT_BG, font=_font(10)).pack(anchor="w", pady=(0, 4))
+                       selectcolor=theme.INPUT_BG, font=_font(10), wraplength=640, justify="left").pack(anchor="w", pady=(0, 4))
         self._field_label(s, "Запасные модели (через запятую; доступные — кнопка «Найти доступные модели» в карточке Gemini)")
         sv["fallback_models"] = tk.StringVar(master=self.root, value=", ".join(cur.get("fallback_models") or []))
         self._entry(s, sv["fallback_models"], 44)
@@ -879,7 +907,7 @@ class AppWindow:
         self._field_label(s, "Папки, с которыми можно работать (по одной на строку)")
         self._s_folders = self._text_box(s, 3, "\n".join(cur.get("allowed_folders", [])))
 
-        s = self._section(body, "Голос")
+        s = self._section(tabs["voice"], "Голос")
         sv["voice_feedback"] = tk.BooleanVar(master=self.root, value=cur.get("voice_feedback_enabled", False))
         tk.Checkbutton(s, text="Озвучивать действия голосом (офлайн)", variable=sv["voice_feedback"], bg=theme.CARD_BG,
                        fg=theme.TEXT, activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
@@ -907,7 +935,7 @@ class AppWindow:
                                justify="left", wraplength=640)
         self._s_mic.pack(fill="x", pady=(6, 0))
 
-        s = self._section(body, "Локальная модель (Ollama) — необязательно")
+        s = self._section(tabs["ai"], "Локальная модель (Ollama) — необязательно")
         sv["local_enabled"] = tk.BooleanVar(master=self.root, value=cur.get("local_model_enabled", True))
         tk.Checkbutton(s, text="Использовать для простых команд", variable=sv["local_enabled"], bg=theme.CARD_BG,
                        fg=theme.TEXT, activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
@@ -916,13 +944,15 @@ class AppWindow:
         sv["local_name"] = tk.StringVar(master=self.root, value=cur.get("local_model_name", "qwen2.5:3b"))
         self._entry(s, sv["local_name"], 24)
 
-        s = self._section(body, "Запуск")
+        s = self._section(tabs["sys"], "Запуск")
         sv["autostart"] = tk.BooleanVar(master=self.root, value=autostart.is_enabled())
         tk.Checkbutton(s, text="Запускать вместе с Windows (сразу в трее, без окна)", variable=sv["autostart"],
                        bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
                        font=_font(10)).pack(anchor="w")
         _button(s, "🖥 Создать ярлыки (рабочий стол и меню Пуск)", self._make_shortcuts, "neutral",
                 small=True).pack(anchor="w", pady=(8, 0))
+
+        show_tab(getattr(self, "_settings_tab", "ai"))
 
         bar = tk.Frame(body, bg=theme.BG)
         bar.pack(fill="x", pady=(22, 10))

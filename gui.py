@@ -45,7 +45,12 @@ def _format_step_args(step: dict) -> str:
 
 def _step_line(i: int, step: dict) -> str:
     risk = RISK_ICON.get(plan_validator.classify_risk(step), "")
-    return f"{risk} {i + 1}. {step.get('action')}: {_format_step_args(step)}"
+    try:
+        import agent_loop
+        text = agent_loop.describe_step(step)
+    except Exception:
+        text = f"{step.get('action')}: {_format_step_args(step)}"
+    return f"{risk} {i + 1}. {text}"
 
 
 # ---------- общие помощники ----------
@@ -118,11 +123,16 @@ def confirm_plan(summary: str, steps: list, screenshot_b64=None, auto_seconds: i
     check_vars = []
     risk = plan_validator.highest_risk(steps)
 
-    win = _new_window("Подтверди план действий", 600, 740)
+    win = _new_window("Подтверди план действий", 620, 600)
 
-    tk.Label(win, text="Что будет сделано:", font=theme.FONT_HEADING, bg=theme.BG).pack(pady=(10, 0))
-    tk.Label(win, text=summary, font=theme.FONT_BODY, bg=theme.BG,
-             wraplength=560, justify="left").pack(pady=5, padx=10)
+    band_color = {"low": "#15803D", "normal": "#4338CA", "high": "#B91C1C"}.get(risk, "#4338CA")
+    band_title = {"low": "Безопасные действия", "normal": "Подтверди действия", "high": "Внимание: высокий риск"}.get(risk, "Подтверди действия")
+    band = tk.Frame(win, bg=band_color)
+    band.pack(fill="x")
+    tk.Label(band, text=band_title, font=("Segoe UI", 15, "bold"), bg=band_color, fg="white",
+             anchor="w").pack(fill="x", padx=18, pady=(14, 0))
+    tk.Label(band, text=summary, font=theme.FONT_BODY, bg=band_color, fg="#F1F5F9", anchor="w", justify="left",
+             wraplength=580).pack(fill="x", padx=18, pady=(2, 14))
 
     click_steps = [s for s in steps if s.get("action") in plan_validator.POINTER_ACTIONS
                    and "x" in s.get("args", {})]
@@ -143,19 +153,20 @@ def confirm_plan(summary: str, steps: list, screenshot_b64=None, auto_seconds: i
         except Exception:
             pass
 
-    tk.Label(win, text="Шаги (🟢 безопасно · 🟡 обычное · 🔴 высокий риск; "
-                        "сними галочку, чтобы пропустить шаг):",
+    tk.Label(win, text="Шаги (🟢 безопасно · 🟡 обычное · 🔴 высокий риск). Сними галочку, чтобы пропустить шаг:",
              font=theme.FONT_HEADING, bg=theme.BG, wraplength=560, justify="left").pack(
         pady=(10, 0), padx=10, anchor="w")
 
-    canvas = tk.Canvas(win, highlightthickness=0, height=210, bg=theme.BG)
-    scrollbar = tk.Scrollbar(win, orient="vertical", command=canvas.yview)
+    list_box = tk.Frame(win, bg=theme.BG)
+    list_box.pack(fill="both", expand=True, padx=(10, 6), pady=5)
+    canvas = tk.Canvas(list_box, highlightthickness=0, height=210, bg=theme.BG)
+    scrollbar = tk.Scrollbar(list_box, orient="vertical", command=canvas.yview)
     steps_frame = tk.Frame(canvas, bg=theme.BG)
     steps_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
     canvas.create_window((0, 0), window=steps_frame, anchor="nw")
     canvas.configure(yscrollcommand=scrollbar.set)
-    canvas.pack(fill="both", expand=True, padx=(10, 0), pady=5)
     scrollbar.pack(side="right", fill="y")
+    canvas.pack(side="left", fill="both", expand=True)
 
     any_blocked = False
     for i, step in enumerate(steps):
