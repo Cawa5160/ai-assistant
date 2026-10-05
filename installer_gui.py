@@ -47,13 +47,44 @@ def package_name(spec: str) -> str:
     return re.split(r"[<>=!~\[ ;]", spec)[0]
 
 
+def _darker(color, f=0.9):
+    try:
+        c = color.lstrip("#")
+        return "#%02X%02X%02X" % tuple(int(int(c[i:i + 2], 16) * f) for i in (0, 2, 4))
+    except Exception:
+        return color
+
+
 class InstallerApp:
+    @staticmethod
+    def _hover_on(e):
+        try:
+            w = e.widget
+            if str(w.cget("state")) != "disabled":
+                w._base_bg = getattr(w, "_base_bg", w.cget("bg"))
+                w.configure(bg=_darker(w._base_bg), cursor="hand2")
+        except Exception:
+            pass
+
+    @staticmethod
+    def _hover_off(e):
+        try:
+            if hasattr(e.widget, "_base_bg"):
+                e.widget.configure(bg=e.widget._base_bg)
+        except Exception:
+            pass
+
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("AI Ассистент — установка")
         self.root.geometry("480x520")
         self.root.resizable(False, False)
         self.root.configure(bg=BG)
+        self.root.option_add("*Button.relief", "flat")
+        self.root.option_add("*Button.borderWidth", 0)
+        self.root.option_add("*Button.padY", 6)
+        self.root.bind_class("Button", "<Enter>", self._hover_on, add="+")
+        self.root.bind_class("Button", "<Leave>", self._hover_off, add="+")
         try:
             self.root.iconbitmap(ICON_PATH)
         except Exception:

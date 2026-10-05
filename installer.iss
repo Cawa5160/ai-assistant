@@ -12,6 +12,10 @@ UninstallDisplayIcon={app}\AI_Assistant.exe
 PrivilegesRequired=lowest
 Compression=lzma2
 SolidCompression=yes
+WizardStyle=modern
+WizardImageFile=assets\wizard_big.bmp
+WizardSmallImageFile=assets\wizard_small.bmp
+DisableWelcomePage=no
 [Languages]
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 [Tasks]

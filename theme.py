@@ -122,8 +122,55 @@ def style_window(root):
             "*Text.background": p["INPUT_BG"], "*Text.foreground": p["TEXT"],
             "*Text.insertBackground": p["TEXT"],
         }
+        opts.update({"*Button.relief": "flat", "*Button.borderWidth": 0, "*Button.padX": 10,
+                     "*Button.padY": 5, "*Button.activeForeground": "white"})
         for key, value in opts.items():
             root.option_add(key, value)
+        install_button_effects(root)
+    except Exception:
+        pass
+
+
+# ---------- оживление кнопок: курсор-«рука», подсветка при наведении, одинаковые отступы ----------
+
+def shade(color: str, factor: float = 0.88) -> str:
+    """Чуть темнее (factor<1) или светлее (factor>1) цвет '#RRGGBB'."""
+    try:
+        c = color.lstrip("#")
+        r, g, b = (int(c[i:i + 2], 16) for i in (0, 2, 4))
+        if factor > 1:
+            r, g, b = (min(255, int(v + (255 - v) * (factor - 1))) for v in (r, g, b))
+        else:
+            r, g, b = (int(v * factor) for v in (r, g, b))
+        return f"#{r:02X}{g:02X}{b:02X}"
+    except Exception:
+        return color
+
+
+def install_button_effects(root):
+    """Один раз на окно: все tk.Button получают hover-подсветку и курсор-руку (код кнопок менять не нужно)."""
+    def enter(e):
+        w = e.widget
+        try:
+            if str(w.cget("state")) == "disabled":
+                return
+            base = w.cget("bg")
+            w._base_bg = getattr(w, "_base_bg", base)
+            w.configure(bg=shade(w._base_bg, 0.9), activebackground=shade(w._base_bg, 0.82), cursor="hand2")
+        except Exception:
+            pass
+
+    def leave(e):
+        w = e.widget
+        try:
+            if hasattr(w, "_base_bg"):
+                w.configure(bg=w._base_bg)
+        except Exception:
+            pass
+
+    try:
+        root.bind_class("Button", "<Enter>", enter, add="+")
+        root.bind_class("Button", "<Leave>", leave, add="+")
     except Exception:
         pass
 
