@@ -2,9 +2,8 @@
 Профили приложений и игр.
 
 * Для обычных программ — короткие подсказки ИИ-автопилоту (какие горячие клавиши и приёмы там работают).
-* Для игр с античитом (Valorant, CS2, Fortnite, Apex …) режим «hint_only»: автопилот НИЧЕГО не нажимает
-  и не печатает, а только смотрит на экран и подсказывает — автоматические клики и ввод в таких играх
-  могут привести к бану аккаунта.
+* Режим «hint_only» (только подсказки, без нажатий) включается для приложений из profiles.json.
+  Встроенных ограничений для игр нет — решение владельца (риск бана за автоклики в играх с античитом на нём).
 * Свои профили: файл profiles.json рядом с настройками, вида
   {"имя_процесса.exe": {"mode": "hint_only" | "normal", "title": "Моя игра", "hint": "текст подсказки"}}
 """
@@ -16,15 +15,7 @@ from app_paths import DATA_DIR
 PROFILES_PATH = os.path.join(DATA_DIR, "profiles.json")
 
 # Игры с античитом: только подсказки. Имена процессов в нижнем регистре.
-ANTICHEAT_GAMES = {
-    "valorant.exe": "Valorant", "valorant-win64-shipping.exe": "Valorant",
-    "cs2.exe": "Counter-Strike 2", "csgo.exe": "CS:GO",
-    "fortniteclient-win64-shipping.exe": "Fortnite", "r5apex.exe": "Apex Legends",
-    "overwatch.exe": "Overwatch", "rainbowsix.exe": "Rainbow Six Siege", "tslgame.exe": "PUBG",
-    "eldenring.exe": "Elden Ring", "destiny2.exe": "Destiny 2", "leagueclient.exe": "League of Legends",
-    "league of legends.exe": "League of Legends", "escapefromtarkov.exe": "Escape from Tarkov",
-    "gta5.exe": "GTA V Online", "rocketleague.exe": "Rocket League", "dota2.exe": "Dota 2",
-}
+ANTICHEAT_GAMES = {}   # по просьбе владельца ограничений для игр нет; свои можно добавить в profiles.json
 
 BUILTIN = {
     "chrome.exe": ("Chrome", "Адресная строка — Ctrl+L; новая вкладка — Ctrl+T; поиск на странице — Ctrl+F; назад — Alt+←."),
