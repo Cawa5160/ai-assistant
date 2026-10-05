@@ -136,9 +136,27 @@ def _fmt(value) -> str:
     return str(value)
 
 
+_TIME = re.compile(r"^\s*(?:который\s+час|сколько\s+времени|скажи\s+время|время)\s*[?.!]*\s*$", re.I)
+_DATE = re.compile(r"^\s*(?:какое\s+сегодня\s+число|какая\s+сегодня\s+дата|какой\s+сегодня\s+день|дата|сегодняшняя\s+дата)\s*[?.!]*\s*$", re.I)
+_SETTINGS = re.compile(r"^\s*(?:открой|открыть)\s+(?P<w>параметры|настройки(?:\s+windows)?|настройки\s+виндовс|панель управления)\s*[.!]*\s*$", re.I)
+_DAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
+_MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"]
+
+
 def try_quick_action(command: str, notify):
     """-> (описание, функция) или None. notify(заголовок, текст) нужен для таймера."""
     command = command or ""
+    if _TIME.match(command):
+        import datetime
+        return ("Сказать время", lambda: "Сейчас " + datetime.datetime.now().strftime("%H:%M"))
+    if _DATE.match(command):
+        import datetime
+        d = datetime.date.today()
+        return ("Сказать дату", lambda: f"Сегодня {_DAYS[d.weekday()]}, {d.day} {_MONTHS[d.month - 1]} {d.year}")
+    m = _SETTINGS.match(command)
+    if m:
+        target = "control" if "панель" in m.group("w").lower() else "ms-settings:"
+        return ("Открыть " + m.group("w"), lambda: (os.startfile(target), "Открыто: " + m.group("w"))[1])
     m = _TIMER.match(command)
     if m:
         seconds = _seconds(m.group("n"), m.group("unit"))

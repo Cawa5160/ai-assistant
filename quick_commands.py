@@ -9,6 +9,7 @@ APPS = {
     "блокнот": "notepad", "notepad": "notepad",
     "калькулятор": "calc", "calculator": "calc", "calc": "calc",
     "проводник": "explorer", "explorer": "explorer",
+    "пейнт": "mspaint", "paint": "mspaint", "ножницы": "snippingtool",
     "хром": "chrome", "chrome": "chrome", "браузер": "chrome",
 }
 
@@ -29,6 +30,14 @@ SITES = {
     "телеграм": "https://web.telegram.org", "telegram": "https://web.telegram.org",
     "дискорд": "https://discord.com/app", "discord": "https://discord.com/app",
     "гитхаб": "https://github.com", "github": "https://github.com",
+    "инстаграм": "https://www.instagram.com", "instagram": "https://www.instagram.com",
+    "фейсбук": "https://www.facebook.com", "facebook": "https://www.facebook.com",
+    "ватсап": "https://web.whatsapp.com", "whatsapp": "https://web.whatsapp.com",
+    "твич": "https://www.twitch.tv", "twitch": "https://www.twitch.tv",
+    "спотифай": "https://open.spotify.com", "spotify": "https://open.spotify.com",
+    "википедию": "https://ru.wikipedia.org", "википедия": "https://ru.wikipedia.org",
+    "гемини": "https://gemini.google.com", "gemini": "https://gemini.google.com",
+    "диск": "https://drive.google.com", "гугл диск": "https://drive.google.com",
     "карты": "https://maps.google.com", "переводчик": "https://translate.google.com",
 }
 _SITE = re.compile(
@@ -55,6 +64,31 @@ _MEDIA = [
 
 _SHOW_DESKTOP = re.compile(r"^\s*(?:покажи рабочий стол|сверни все окна|сверни всё|сверни все|покажи десктоп)\s*[.!]*\s*$", re.I)
 _CLOSE_WINDOW = re.compile(r"^\s*(?:закрой|закрыть)\s+(?:это\s+|текущее\s+)?окно\s*[.!]*\s*$", re.I)
+
+
+# (шаблон, клавиши, описание, trusted) — горячие клавиши в текущем окне. «Опасные» (закрыть, заблокировать) — без автозапуска
+def _hk(pat):
+    return re.compile(r"^\s*(?:пожалуйста[,\s]+)?(?:" + pat + r")\s*[.!]*\s*$", re.I)
+
+
+HOTKEY_COMMANDS = [
+    (_hk(r"новая вкладка|открой новую вкладку"), ["ctrl", "t"], "Новая вкладка (Ctrl+T)", True),
+    (_hk(r"закрой вкладку|закрыть вкладку"), ["ctrl", "w"], "Закрыть вкладку (Ctrl+W)", False),
+    (_hk(r"обнови страницу|обнови|перезагрузи страницу"), ["f5"], "Обновить страницу (F5)", True),
+    (_hk(r"на весь экран|полноэкранный режим"), ["f11"], "Во весь экран (F11)", True),
+    (_hk(r"найди на странице|поиск на странице"), ["ctrl", "f"], "Поиск на странице (Ctrl+F)", True),
+    (_hk(r"скопируй|копировать"), ["ctrl", "c"], "Копировать (Ctrl+C)", True),
+    (_hk(r"вставь|вставить"), ["ctrl", "v"], "Вставить (Ctrl+V)", True),
+    (_hk(r"выдели всё|выдели все|выделить всё"), ["ctrl", "a"], "Выделить всё (Ctrl+A)", True),
+    (_hk(r"отмени|отменить действие"), ["ctrl", "z"], "Отменить (Ctrl+Z)", True),
+    (_hk(r"сохрани файл|сохрани документ"), ["ctrl", "s"], "Сохранить (Ctrl+S)", False),
+    (_hk(r"диспетчер задач|открой диспетчер задач"), ["ctrl", "shift", "esc"], "Диспетчер задач", True),
+    (_hk(r"сверни окно|свернуть окно"), ["win", "down"], "Свернуть окно (Win+↓)", True),
+    (_hk(r"разверни окно|развернуть окно"), ["win", "up"], "Развернуть окно (Win+↑)", True),
+    (_hk(r"переключи окно|следующее окно"), ["alt", "tab"], "Переключить окно (Alt+Tab)", True),
+    (_hk(r"заблокируй (?:компьютер|экран)|заблокировать компьютер"), ["win", "l"], "Заблокировать компьютер (Win+L)", False),
+    (_hk(r"буфер обмена|открой буфер обмена"), ["win", "v"], "Журнал буфера обмена (Win+V)", True),
+]
 
 
 def _plan(summary, steps, trusted=True):
@@ -85,6 +119,9 @@ def _simple_plan(command: str):
         title = "на рабочий стол" if where == "desktop" else "в Изображения → Screenshots"
         return _plan(f"Сделать скриншот и сохранить {title}",
                      [{"action": "save_screenshot", "args": {"where": where}}])
+    for pattern, keys, title, trusted in HOTKEY_COMMANDS:
+        if pattern.match(command):
+            return _plan(title, [{"action": "hotkey", "args": {"keys": keys}}], trusted=trusted)
     if _SHOW_DESKTOP.match(command):
         return _plan("Показать рабочий стол (Win+D)", [{"action": "hotkey", "args": {"keys": ["win", "d"]}}])
     if _CLOSE_WINDOW.match(command):

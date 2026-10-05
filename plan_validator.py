@@ -53,7 +53,7 @@ SAFE_APP_NAMES = {
     "chrome", "chrome.exe", "firefox", "firefox.exe",
     "msedge", "msedge.exe", "edge",
     "notepad", "notepad.exe", "calc", "calc.exe", "calculator",
-    "explorer", "explorer.exe",
+    "explorer", "explorer.exe", "mspaint", "snippingtool",
 }
 
 ALLOWED_KEYS = {
