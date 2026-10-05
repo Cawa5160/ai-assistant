@@ -169,15 +169,15 @@ def reject_all():
 
 # ---------- обмен с Telegram ----------
 
-def _call(method: str, token: str = None, timeout: int = 35, **params):
+def _call(method: str, token: str = None, http_timeout: int = 35, **params):
     token = token or get_token()
-    r = requests.post(f"{API}/bot{token}/{method}", json=params, timeout=timeout)
+    r = requests.post(f"{API}/bot{token}/{method}", json=params, timeout=http_timeout)
     return r.json()
 
 
 def _send(chat_id, text: str):
     try:
-        _call("sendMessage", timeout=15, chat_id=chat_id, text=text[:3900])
+        _call("sendMessage", http_timeout=15, chat_id=chat_id, text=text[:3900])
     except Exception as e:
         log(f"Telegram: не отправилось сообщение: {e}")
 
@@ -197,7 +197,7 @@ def _send_photo(chat_id, image):
 def check_token(token: str):
     """-> (ok, имя бота или текст ошибки)."""
     try:
-        r = _call("getMe", token=token.strip(), timeout=15)
+        r = _call("getMe", token=token.strip(), http_timeout=15)
         if r.get("ok"):
             return True, "@" + str(r["result"].get("username", ""))
         return False, str(r.get("description", "неверный токен"))
@@ -282,7 +282,7 @@ def _loop(stop):
             params = {"timeout": 25, "allowed_updates": ["message"]}
             if offset is not None:
                 params["offset"] = offset
-            r = _call("getUpdates", token=token, timeout=40, **params)
+            r = _call("getUpdates", token=token, http_timeout=40, **params)
             if not r.get("ok"):
                 raise RuntimeError(str(r.get("description", "ошибка Telegram")))
             _state["error"] = ""
