@@ -261,6 +261,9 @@ def list_running_apps():
 
 # ---------- Единая точка выполнения шага плана ----------
 
+RECENT_STEPS = []   # шаги последней команды — из них «запомни как …» делает макрос
+
+
 def run_step(step: dict):
     """
     Выполняет один (уже проверенный plan_validator) шаг. Один диспетчер на
@@ -269,6 +272,11 @@ def run_step(step: dict):
     action = step.get("action")
     args = dict(step.get("args", {}))
     audit.record(step)
+    try:
+        RECENT_STEPS.append({"action": action, "args": dict(args)})
+        del RECENT_STEPS[:-60]
+    except Exception:
+        pass
 
     if action == "open_app":
         open_app(args["app_name"])

@@ -60,6 +60,7 @@ from local_brain import try_local_plan
 from quick_commands import try_quick_plan
 from quick_actions import try_quick_action
 import key_manager
+import macros
 from logger import log
 
 _app = None
@@ -380,13 +381,16 @@ def process_command(user_command: str):
     outcome = "ok"
 
     try:
-        action = try_quick_action(user_command, notify)
+        action = macros.try_memory_command(user_command, action_executor.RECENT_STEPS)
+        if action is None:
+            action_executor.RECENT_STEPS.clear()      # новая команда — новая «запись» шагов
+            action = try_quick_action(user_command, notify)
         if action is not None:
             outcome = _run_quick_action(user_command, action)
         elif config.get("view_only"):
             outcome = _run_view_only(user_command)
         else:
-            plan = try_quick_plan(user_command) or try_local_plan(user_command)
+            plan = macros.try_macro_plan(user_command) or try_quick_plan(user_command) or try_local_plan(user_command)
             if plan is not None:
                 outcome = _run_local_plan(user_command, plan)
             else:
