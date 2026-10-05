@@ -811,7 +811,7 @@ class AppWindow:
 
         # ---- вкладки внутри Настроек ----
         tab_defs = [("ai", "🤖  ИИ"), ("look", "🎨  Внешний вид"), ("ctrl", "🕹  Управление"),
-                    ("voice", "🎙  Голос"), ("sys", "⚙  Запуск")]
+                    ("voice", "🎙  Голос"), ("tg", "✈  Telegram"), ("sys", "⚙  Запуск")]
         tabbar = tk.Frame(body, bg=theme.BG)
         tabbar.pack(fill="x", pady=(14, 0))
         holder = tk.Frame(body, bg=theme.BG)
@@ -944,6 +944,8 @@ class AppWindow:
         sv["local_name"] = tk.StringVar(master=self.root, value=cur.get("local_model_name", "qwen2.5:3b"))
         self._entry(s, sv["local_name"], 24)
 
+        self._build_telegram_tab(tabs["tg"], sv, cur)
+
         s = self._section(tabs["sys"], "Запуск")
         sv["autostart"] = tk.BooleanVar(master=self.root, value=autostart.is_enabled())
         tk.Checkbutton(s, text="Запускать вместе с Windows (сразу в трее, без окна)", variable=sv["autostart"],
@@ -961,6 +963,105 @@ class AppWindow:
                                   justify="left", wraplength=520)
         self._s_status.pack(side="left", padx=14)
         return page
+
+    # ----- вкладка Telegram -----
+
+    def _build_telegram_tab(self, tab, sv, cur):
+        import telegram_bot
+
+        s = self._section(tab, "Управление из Telegram", (
+            "Необязательно. Ты пишешь своему боту — ассистент выполняет команду на этом компьютере. "
+            "Команды из Telegram никогда не запускаются сами: на компьютере всегда нужно нажать «Разрешить»."))
+        tk.Label(s, text=("Как создать бота (1 минута):\n"
+                          "1. В Telegram открой @BotFather и отправь /newbot\n"
+                          "2. Придумай имя и логин бота (логин оканчивается на bot)\n"
+                          "3. BotFather пришлёт токен — вставь его ниже и нажми «Сохранить настройки»\n"
+                          "4. Напиши своему боту /start — он выдаст код из 16 символов\n"
+                          "5. Введи этот код ниже, в «Заявки на доступ»"),
+                 font=_font(10), bg=theme.CARD_BG, fg=theme.TEXT, anchor="w", justify="left",
+                 wraplength=640).pack(fill="x", pady=(0, 8))
+        sv["tg_enabled"] = tk.BooleanVar(master=self.root, value=bool(cur.get("telegram_enabled", False)))
+        tk.Checkbutton(s, text="Включить управление из Telegram", variable=sv["tg_enabled"], bg=theme.CARD_BG,
+                       fg=theme.TEXT, activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
+                       font=_font(10)).pack(anchor="w")
+        has_token = bool(telegram_bot.get_token())
+        self._field_label(s, "Токен бота" + (" (сохранён — оставь пустым, чтобы не менять)" if has_token else ""))
+        sv["tg_token"] = tk.StringVar(master=self.root, value="")
+        entry = self._entry(s, sv["tg_token"], 52)
+        entry.config(show="•")
+        sv["tg_clear"] = tk.BooleanVar(master=self.root, value=False)
+        row = tk.Frame(s, bg=theme.CARD_BG)
+        row.pack(fill="x", pady=(8, 0))
+        self._tg_status = tk.Label(row, text="Статус: " + telegram_bot.status(), font=_font(10), bg=theme.CARD_BG,
+                                   fg=theme.TEXT_MUTED, anchor="w", justify="left", wraplength=420)
+
+        def check():
+            token = sv["tg_token"].get().strip() or telegram_bot.get_token()
+            self._tg_status.config(text="Проверяю токен…")
+
+            def work():
+                ok, info = telegram_bot.check_token(token) if token else (False, "токен не указан")
+                ui_thread.post(self._tg_status.config, text=("✓ Токен верный, бот " + info) if ok else ("✗ " + info))
+
+            threading.Thread(target=work, daemon=True).start()
+
+        _button(row, "Проверить токен", check, "neutral", small=True).pack(side="left")
+        if has_token:
+            tk.Checkbutton(row, text="удалить сохранённый токен", variable=sv["tg_clear"], bg=theme.CARD_BG,
+                           fg=theme.TEXT, activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
+                           font=_font(9)).pack(side="left", padx=10)
+        self._tg_status.pack(fill="x", pady=(6, 0))
+
+        s2 = self._section(tab, "Заявки на доступ", "Человек пишет боту /start и получает код из 16 символов. "
+                                                    "Введи этот код здесь — только так он получит доступ. Вводи код только от человека, которого знаешь.")
+        self._tg_requests = tk.Label(s2, text="", font=_font(10), bg=theme.CARD_BG, fg=theme.TEXT, anchor="w",
+                                     justify="left", wraplength=640)
+        self._tg_requests.pack(fill="x")
+        code_row = tk.Frame(s2, bg=theme.CARD_BG)
+        code_row.pack(fill="x", pady=(8, 0))
+        code_var = tk.StringVar(master=self.root)
+        code_entry = tk.Entry(code_row, textvariable=code_var, width=26, font=("Consolas", 13), relief="flat",
+                              bg=theme.INPUT_BG, fg=theme.TEXT, insertbackground=theme.TEXT, highlightthickness=1,
+                              highlightbackground=theme.BORDER, highlightcolor=theme.PRIMARY)
+        code_entry.pack(side="left", ipady=4)
+        self._tg_msg = tk.Label(s2, text="", font=_font(10), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w",
+                                justify="left", wraplength=640)
+
+        s3 = self._section(tab, "Подтверждённые пользователи")
+        users_frame = tk.Frame(s3, bg=theme.CARD_BG)
+        users_frame.pack(fill="x")
+
+        def refresh_tg():
+            pend = telegram_bot.pending_requests()
+            self._tg_requests.config(text=("Ждут подтверждения: " + ", ".join(p["name"] for p in pend)) if pend
+                                     else "Заявок нет. Нажми «Обновить», когда человек напишет боту.")
+            for w in users_frame.winfo_children():
+                w.destroy()
+            us = telegram_bot.users()
+            if not us:
+                tk.Label(users_frame, text="Пока никого.", font=_font(10), bg=theme.CARD_BG, fg=theme.TEXT_MUTED,
+                         anchor="w").pack(fill="x")
+            for u in us:
+                r = tk.Frame(users_frame, bg=theme.CARD_BG)
+                r.pack(fill="x", pady=2)
+                tk.Label(r, text=f"{u.get('name')}  (id {u.get('id')})", font=_font(10), bg=theme.CARD_BG,
+                         fg=theme.TEXT).pack(side="left")
+                _button(r, "Отозвать доступ",
+                        lambda uid=u.get("id"): (telegram_bot.revoke(uid), refresh_tg()), "neutral",
+                        small=True).pack(side="right")
+            self._tg_status.config(text="Статус: " + telegram_bot.status())
+
+        def do_confirm():
+            ok, msg = telegram_bot.confirm(code_var.get())
+            self._tg_msg.config(text=("✓ " if ok else "✗ ") + msg, fg=theme.SUCCESS if ok else theme.DANGER)
+            if ok:
+                code_var.set("")
+            refresh_tg()
+
+        _button(code_row, "Подтвердить код", do_confirm, "success", small=True).pack(side="left", padx=8)
+        _button(code_row, "↻ Обновить", refresh_tg, "neutral", small=True).pack(side="left")
+        self._tg_msg.pack(fill="x", pady=(6, 0))
+        refresh_tg()
 
     def _set_text(self, widget, text):
         try:
@@ -1093,6 +1194,9 @@ class AppWindow:
             "autostart": sv["autostart"].get(),
             "accent": sv["accent"].get(),
             "view_only": sv["view_only"].get(),
+            "telegram_enabled": sv["tg_enabled"].get(),
+            "telegram_token": sv["tg_token"].get().strip(),
+            "telegram_clear_token": sv["tg_clear"].get(),
             "use_fallback_models": sv["use_fallback"].get(),
             "fallback_models": [m.strip() for m in re.split(r"[,;\s]+", sv["fallback_models"].get()) if m.strip()][:4],
         }

@@ -129,7 +129,7 @@ def ask_command() -> str:
 # ---------- подтверждение обычного плана ----------
 
 @on_ui
-def confirm_plan(summary: str, steps: list, screenshot_b64=None, auto_seconds: int = 0):
+def confirm_plan(summary: str, steps: list, screenshot_b64=None, auto_seconds: int = 0, manual: bool = False):
     """
     Показывает план (от локальной модели) с галочкой на каждом шаге.
     Возвращает None при отмене, иначе — список шагов, у которых галочка осталась.
@@ -230,7 +230,7 @@ def confirm_plan(summary: str, steps: list, screenshot_b64=None, auto_seconds: i
                   relief="flat", width=28, command=on_yes).pack(side="left", padx=10)
         tk.Button(btn_frame, text="❌ Отмена", bg=theme.NEUTRAL, fg="white", font=bold,
                   relief="flat", width=15, command=on_no).pack(side="left", padx=10)
-    elif risk == "low" or (risk == "normal" and auto_seconds > 0):
+    elif not manual and (risk == "low" or (risk == "normal" and auto_seconds > 0)):
         countdown = {"n": auto_seconds if auto_seconds > 0 else 3}
         auto_label = "🟢 Безопасные действия" if risk == "low" else "⏱ Простая команда"
 

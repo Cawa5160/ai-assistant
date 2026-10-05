@@ -61,6 +61,7 @@ from quick_commands import try_quick_plan
 from quick_actions import try_quick_action
 import key_manager
 import macros
+import telegram_bot
 from logger import log
 
 _app = None
@@ -160,12 +161,12 @@ def _run_local_plan(user_command: str, plan: dict) -> str:
     display_summary = ("⚠️ ВНИМАНИЕ, ПОТЕНЦИАЛЬНО РИСКОВАННОЕ ДЕЙСТВИЕ ⚠️\n\n" + summary) if dangerous else summary
 
     auto = 0
-    if plan.get("trusted") and not dangerous:
+    if plan.get("trusted") and not dangerous and not _is_remote():
         try:
             auto = max(0, min(30, int(config.get("auto_confirm_seconds"))))
         except Exception:
             auto = 0
-    confirmed_steps = gui.confirm_plan(display_summary, steps, auto_seconds=auto)
+    confirmed_steps = gui.confirm_plan(display_summary, steps, auto_seconds=auto, manual=_is_remote())
     if confirmed_steps is None:
         log("Пользователь отменил выполнение плана.")
         history.add(user_command, summary, "отменено пользователем")
@@ -284,7 +285,7 @@ def _run_agent_visible(user_command: str, on_wait) -> str:
     )
     max_steps = int(config.get("agent_max_steps"))
 
-    if not gui.confirm_agent_start(user_command, intent, steps_text, max_steps, auto_seconds=3 if trivial else 0):
+    if not gui.confirm_agent_start(user_command, intent, steps_text, max_steps, auto_seconds=3 if (trivial and not _is_remote()) else 0):
         log("Пользователь отменил запуск автопилота.")
         history.add(user_command, intent, "отменено пользователем")
         return "ok"
@@ -370,6 +371,30 @@ def _offer_retry_after_limit(user_command: str):
             notify("AI Ассистент", f"Повторю команду в {when:%H:%M}.")
     except Exception as e:
         log(f"Не удалось предложить повтор после лимита: {e}")
+
+
+_remote = threading.local()      # команда пришла из Telegram: автозапуск отключён, всегда нужен клик на компьютере
+
+
+def _is_remote() -> bool:
+    return bool(getattr(_remote, "on", False))
+
+
+def on_telegram_command(text: str, user_id, user_name) -> str:
+    """Выполняет команду из Telegram (подтверждение — на компьютере) и возвращает короткий итог для чата."""
+    started = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - 1))
+    _remote.on = True
+    try:
+        process_command(text)
+    finally:
+        _remote.on = False
+    try:
+        last = history.get_all()[0]
+        if last.get("time", "") >= started:
+            return last.get("status") or last.get("summary") or "Готово"
+    except Exception:
+        pass
+    return "Готово"
 
 
 def process_command(user_command: str):
@@ -489,6 +514,7 @@ def apply_settings(values: dict):
         "use_fallback_models": bool(values.get("use_fallback_models", True)),
         "fallback_models": values.get("fallback_models", ["gemini-2.5-flash", "gemini-2.5-flash-lite"]),
         "auto_confirm_seconds": values.get("auto_confirm_seconds", 5),
+        "telegram_enabled": bool(values.get("telegram_enabled", False)),
         "hotkey_open_window": values["hotkey_open_window"],
         "hotkey_voice": values.get("hotkey_voice", "ctrl+shift+v"),
         "hotkey_stop": values.get("hotkey_stop", "ctrl+shift+s"),
@@ -501,6 +527,17 @@ def apply_settings(values: dict):
         "local_model_name": values["local_model_name"],
     })
     action_executor.sync_pyautogui_settings()
+    try:
+        if values.get("telegram_clear_token"):
+            telegram_bot.set_token("")
+        elif values.get("telegram_token"):
+            telegram_bot.set_token(values["telegram_token"])
+        if values.get("telegram_enabled"):
+            telegram_bot.restart(on_telegram_command)
+        else:
+            telegram_bot.stop()
+    except Exception as e:
+        log(f"Telegram: не удалось применить настройки: {e}")
     if values["autostart"]:
         autostart.enable()
     else:
@@ -668,6 +705,7 @@ def main():
         icon = setup_tray()
         threading.Thread(target=icon.run, daemon=True).start()
         scheduler.start(on_scheduled_command)
+        telegram_bot.start(on_telegram_command)
         ui_thread.post(_startup, background)
         log("Приложение работает. Крестик окна сворачивает его в трей; выход — кнопка в окне или меню трея.")
         _app.run()
