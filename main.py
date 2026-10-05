@@ -236,6 +236,14 @@ def _run_agent(user_command: str) -> str:
             waited["told"] = True
             notify("AI Ассистент", f"{why}. Подожду ~{int(seconds)} с и продолжу.")
 
+    try:
+        import app_profiles
+        prof = app_profiles.current_profile()
+        if prof.get("mode") == "hint_only":
+            notify("AI Ассистент", app_profiles.hint_only_message(prof))
+            return _run_view_only(user_command)
+    except Exception as e:
+        log(f"Профиль приложения не определён: {e}")
     _hide_own_windows()
     try:
         return _run_agent_visible(user_command, on_wait)

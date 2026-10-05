@@ -201,7 +201,8 @@ def decide(goal: str, history: list, on_wait=None, cancel=None):
              if elements else "")
     try:
         import macros
-        notes_block = macros.notes_for_prompt()
+        import app_profiles
+        notes_block = macros.notes_for_prompt() + app_profiles.prompt_block(app_profiles.current_profile())
     except Exception:
         notes_block = ""
     prompt = (
@@ -327,6 +328,14 @@ def run_agent(goal: str, ui, first_decision=None):
     for step_no in range(1, max_steps + 1):
         if not _wait_if_paused(ui):
             return False, "Остановлено пользователем."
+
+        try:
+            import app_profiles
+            prof = app_profiles.current_profile()
+            if prof.get("mode") == "hint_only":
+                return False, app_profiles.hint_only_message(prof)
+        except Exception:
+            pass
 
         if decision is None:
             try:
