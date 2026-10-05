@@ -72,6 +72,33 @@ def _card(parent, **kw):
                     highlightbackground=theme.BORDER, highlightcolor=theme.BORDER, **kw)
 
 
+def _mix(c1: str, c2: str, t: float) -> str:
+    a = [int(c1.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)]
+    b = [int(c2.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)]
+    return "#%02X%02X%02X" % tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def _hero(parent, title, subtitle, height=118):
+    """Шапка страницы: градиент акцентного цвета и белый текст."""
+    canvas = tk.Canvas(parent, height=height, highlightthickness=0, bd=0, bg=theme.BG)
+    accent = theme.ACCENTS["light"].get(config.get("accent") or "indigo", theme.ACCENTS["light"]["indigo"])
+    start, end = accent[1], _mix(accent[1], "#9333EA", 0.6)      # тёмный градиент: белый текст читается в обеих темах
+
+    def draw(event=None):
+        canvas.delete("all")
+        w = max(canvas.winfo_width(), 200)
+        strips = 64
+        for i in range(strips):
+            canvas.create_rectangle(i * w / strips, 0, (i + 1) * w / strips + 1, height, outline="",
+                                    fill=_mix(start, end, i / (strips - 1)))
+        canvas.create_text(26, 36, text=title, anchor="w", fill="#FFFFFF", font=_font(20, True))
+        canvas.create_text(26, 78, text=subtitle, anchor="w", fill="#E8E9FF", font=_font(10),
+                           width=max(300, w - 52))
+
+    canvas.bind("<Configure>", draw)
+    return canvas
+
+
 def _status_color(status: str) -> str:
     s = (status or "").lower()
     if s.startswith("готово") or "выполнено" in s:
@@ -323,12 +350,9 @@ class AppWindow:
         body = tk.Frame(page.inner, bg=theme.BG)
         body.pack(fill="both", expand=True, padx=32, pady=26)
 
-        tk.Label(body, text="Привет! Я AI Ассистент 👋", font=_font(20, True), bg=theme.BG, fg=theme.TEXT,
-                 anchor="w").pack(fill="x")
-        tk.Label(body, text="Напиши, что нужно сделать, или нажми на микрофон. Я посмотрю на экран и выполню это "
-                            "по шагам, а на опасные действия всегда спрошу разрешения.",
-                 font=_font(11), fg=theme.TEXT_MUTED, bg=theme.BG, anchor="w", justify="left",
-                 wraplength=700).pack(fill="x", pady=(4, 16))
+        _hero(body, "Привет! Я AI Ассистент 👋",
+              "Напиши, что нужно сделать, или нажми на микрофон. Я посмотрю на экран и выполню это по шагам, "
+              "а на опасные действия всегда спрошу разрешения.").pack(fill="x", pady=(0, 18))
 
         self._busy_banner = tk.Label(body, text="", font=_font(10, True), bg=theme.NAV_ACTIVE, fg=theme.PRIMARY,
                                      anchor="w", padx=12, pady=8, justify="left", wraplength=680)
@@ -337,12 +361,12 @@ class AppWindow:
         self._input_card.pack(fill="x")
         inner = tk.Frame(self._input_card, bg=theme.CARD_BG)
         inner.pack(fill="x", padx=10, pady=10)
-        self._input = tk.Text(inner, height=3, wrap="word", font=_font(11), bd=0, relief="flat",
+        buttons = tk.Frame(inner, bg=theme.CARD_BG)
+        buttons.pack(side="right", padx=(8, 0))        # сначала кнопки — иначе широкое поле вытесняет их за край
+        self._input = tk.Text(inner, height=3, width=10, wrap="word", font=_font(11), bd=0, relief="flat",
                               bg=theme.CARD_BG, fg=theme.TEXT, insertbackground=theme.TEXT,
                               padx=6, pady=4, highlightthickness=0)
         self._input.pack(side="left", fill="both", expand=True)
-        buttons = tk.Frame(inner, bg=theme.CARD_BG)
-        buttons.pack(side="right", padx=(8, 0))
         _button(buttons, "🎙 Голосом", self._on_mic, "neutral", small=True).pack(side="top", pady=(0, 6), fill="x")
         _button(buttons, "➤ Выполнить", self._on_send, "primary", small=True).pack(side="top", fill="x")
         self._input.bind("<Return>", self._on_enter)
@@ -361,7 +385,7 @@ class AppWindow:
         tk.Checkbutton(body, text="👁 Только смотреть — ИИ отвечает про экран, но ничего не нажимает и не печатает",
                        variable=self._view_only_var, command=_toggle_view_only, bg=theme.BG, fg=theme.TEXT,
                        activebackground=theme.BG, selectcolor=theme.INPUT_BG, font=_font(9),
-                       anchor="w").pack(fill="x", pady=(0, 10))
+                       anchor="w", highlightthickness=0, bd=0).pack(fill="x", pady=(0, 10))
 
         tk.Label(body, text="Попробуй, например:", font=_font(9, True), fg=theme.TEXT_MUTED, bg=theme.BG,
                  anchor="w").pack(fill="x")
@@ -379,6 +403,7 @@ class AppWindow:
             row.grid_columnconfigure(i, weight=1, uniform="cards")
             card = _card(row)
             card.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 8, 0))
+            tk.Frame(card, bg=theme.PRIMARY, height=3).pack(fill="x")      # цветная полоска сверху
             tk.Label(card, text=title, font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
                      anchor="w").pack(fill="x", padx=14, pady=(12, 2))
             label = tk.Label(card, text="Проверяю…", font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED,
@@ -677,7 +702,7 @@ class AppWindow:
 
     def _field_label(self, parent, text):
         tk.Label(parent, text=text, font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
-                 anchor="w").pack(fill="x", pady=(6, 2))
+                 anchor="w", justify="left", wraplength=640).pack(fill="x", pady=(6, 2))
 
     def _text_box(self, parent, height, content=""):
         box = tk.Text(parent, height=height, wrap="word", font=theme.FONT_MONO, bd=0, relief="flat",
