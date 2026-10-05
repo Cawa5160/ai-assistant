@@ -194,7 +194,7 @@ def _generate_one(payload: dict, on_wait=None, cancel=None, max_wait: float = 15
         if outcome == "server_error":
             server_fails += 1
             if server_fails >= 3:
-                raise RuntimeError("Сервер Gemini временно не отвечает. Попробуй через минуту.")
+                raise LimitError("Сервер Gemini временно не отвечает (перегрузка на стороне Google). Попробуй через минуту.")
             time.sleep(2.0)
             continue
         reasons[key] = kind if outcome == "rate_limited" and kind else outcome
