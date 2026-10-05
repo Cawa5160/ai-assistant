@@ -205,6 +205,16 @@ def _send_photo(chat_id, image) -> bool:
 _SCREEN_WORDS = re.compile(r"скрин|screenshot|screen\b|снимок экрана|знімок екрана|что на экране|що на екрані", re.I)
 
 
+_FILLER = re.compile(r"\b(?:скрин\w*|screenshot|screen|снимок|снимки|знімок|экрана|екрана|экран|екран|сделай|зделай|зроби|сними|"
+                     r"пришли|отправь|скинь|покажи|мне|и|в|на|телеграм\w*|пожалуйста|please|send|take|of|the|me)\b", re.I)
+
+
+def _screen_target(text: str) -> str:
+    """«скрин вкладки ютуб» -> «вкладки ютуб»; «сделай скрин экрана и пришли» -> ''."""
+    t = re.sub(r"[.,!?]+", " ", text)
+    return " ".join(_FILLER.sub(" ", t).split())
+
+
 def _wants_screen(text: str) -> bool:
     t = text.strip()
     return t.startswith("/screen") or (len(t) <= 80 and bool(_SCREEN_WORDS.search(t)))
@@ -312,6 +322,12 @@ def _handle(msg: dict):
                     "ассистенту (например: «открой блокнот и напиши привет»). На компьютере нужно будет нажать "
                     "«Разрешить» — сам по себе он ничего не запускает.")
         return
+    target = _screen_target(text) if _wants_screen(text) and not text.startswith("/screen") else ""
+    if target and _on_command is not None:
+        log(f"Telegram: скриншот с действием от {name}: {redact(text)[:120]}")
+        _send(chat, "⏳ Принято: сначала перейду к нужному окну, потом пришлю скриншот.")
+        threading.Thread(target=_run_screen_target, args=(chat, target, uid, name), daemon=True).start()
+        return
     if _wants_screen(text):
         try:
             import screen_utils
@@ -326,6 +342,17 @@ def _handle(msg: dict):
     log(f"Telegram: команда от {name}: {redact(text)[:120]}")
     _send(chat, "⏳ Принято. Подтверди выполнение на компьютере.")
     threading.Thread(target=_run_command, args=(chat, text, uid, name), daemon=True).start()
+
+
+def _run_screen_target(chat, target, uid, name):
+    try:
+        _on_command(f"Переключись на: {target}. Только переключись (найди нужное окно или вкладку), "
+                    "больше ничего не делай, ничего не закрывай и не вводи.", uid, name)
+        time.sleep(1.5)
+        import screen_utils
+        _send_photo(chat, screen_utils.take_screenshot_color())
+    except Exception as e:
+        _send(chat, f"❌ Не получилось: {redact(str(e))[:300]}")
 
 
 def _run_command(chat, text, uid, name):
