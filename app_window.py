@@ -91,12 +91,65 @@ def _hero(parent, title, subtitle, height=118):
         for i in range(strips):
             canvas.create_rectangle(i * w / strips, 0, (i + 1) * w / strips + 1, height, outline="",
                                     fill=_mix(start, end, i / (strips - 1)))
-        canvas.create_text(26, 36, text=title, anchor="w", fill="#FFFFFF", font=_font(20, True))
-        canvas.create_text(26, 78, text=subtitle, anchor="w", fill="#E8E9FF", font=_font(10),
+        canvas.create_text(26, 30, text=title, anchor="w", fill="#FFFFFF", font=_font(20, True))
+        canvas.create_text(26, 62, text=subtitle, anchor="nw", fill="#E8E9FF", font=_font(10),
                            width=max(300, w - 52))
 
     canvas.bind("<Configure>", draw)
     return canvas
+
+
+def _days_text(days) -> str:
+    """['mon',...] -> «Каждый день» / «По будням» / «По выходным» / «Пн, Ср»."""
+    d = set(days or [])
+    if d == {k for k, _ in DAYS}:
+        return "Каждый день"
+    if d == {"mon", "tue", "wed", "thu", "fri"}:
+        return "По будням"
+    if d == {"sat", "sun"}:
+        return "По выходным"
+    return ", ".join(DAY_NAMES.get(k, k) for k, _ in DAYS if k in d) or "—"
+
+
+def _human_time(stamp: str) -> str:
+    """'2026-10-05 14:05:33' -> 'сегодня, 14:05' / 'вчера, 14:05' / '03.10, 14:05'."""
+    import datetime
+    try:
+        t = datetime.datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return stamp
+    delta = (datetime.date.today() - t.date()).days
+    day = "сегодня" if delta == 0 else "вчера" if delta == 1 else t.strftime("%d.%m")
+    return f"{day}, {t:%H:%M}"
+
+
+class _TimeField:
+    """Выбор времени: два счётчика «часы : минуты». .get() -> 'ЧЧ:ММ', .set('ЧЧ:ММ')."""
+
+    def __init__(self, parent, value="09:00"):
+        self.frame = tk.Frame(parent, bg=theme.CARD_BG)
+        self.h = tk.StringVar(master=parent, value=value[:2])
+        self.m = tk.StringVar(master=parent, value=value[3:5])
+        opts = dict(width=3, font=_font(16, True), justify="center", relief="flat", bg=theme.INPUT_BG,
+                    fg=theme.TEXT, insertbackground=theme.TEXT, highlightthickness=1,
+                    highlightbackground=theme.BORDER, highlightcolor=theme.PRIMARY, wrap=True, format="%02.0f")
+        tk.Spinbox(self.frame, from_=0, to=23, textvariable=self.h, **opts).pack(side="left")
+        tk.Label(self.frame, text=" : ", font=_font(16, True), bg=theme.CARD_BG, fg=theme.TEXT).pack(side="left")
+        tk.Spinbox(self.frame, from_=0, to=59, textvariable=self.m, **opts).pack(side="left")
+
+    def get(self):
+        try:
+            return f"{int(self.h.get()):02d}:{int(self.m.get()):02d}"
+        except ValueError:
+            return ""
+
+    def set(self, value):
+        self.h.set(value[:2])
+        self.m.set(value[3:5])
+
+
+def _page_hero(parent, title, subtitle):
+    return _hero(parent, title, subtitle, height=104)
 
 
 def _status_color(status: str) -> str:
@@ -555,12 +608,11 @@ class AppWindow:
 
     def _build_history(self, parent):
         page = tk.Frame(parent, bg=theme.BG)
+        _page_hero(page, "История команд", "Последние 20 команд. Пароли и похожие данные в истории скрыты.").pack(
+            fill="x", padx=32, pady=(26, 8))
         head = tk.Frame(page, bg=theme.BG)
-        head.pack(fill="x", padx=32, pady=(26, 4))
-        tk.Label(head, text="История команд", font=_font(18, True), bg=theme.BG, fg=theme.TEXT).pack(side="left")
+        head.pack(fill="x", padx=32)
         _button(head, "↻ Обновить", self.refresh, "neutral", small=True).pack(side="right")
-        tk.Label(page, text="Последние 20 команд. Пароли и похожие данные в истории скрыты.", font=_font(9),
-                 fg=theme.TEXT_MUTED, bg=theme.BG, anchor="w").pack(fill="x", padx=32)
         self._history_scroll = ScrollFrame(page, theme.BG)
         self._history_scroll.pack(fill="both", expand=True, padx=(32, 16), pady=10)
         return page
@@ -581,7 +633,8 @@ class AppWindow:
             top.pack(fill="x", padx=14, pady=(10, 0))
             tk.Label(top, text=e.get("command") or "—", font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
                      anchor="w", justify="left", wraplength=520).pack(side="left", fill="x", expand=True)
-            tk.Label(top, text=e.get("time", ""), font=_font(9), fg=theme.TEXT_MUTED, bg=theme.CARD_BG).pack(side="right")
+            tk.Label(top, text=_human_time(e.get("time", "")), font=_font(9), fg=theme.TEXT_MUTED,
+                     bg=theme.CARD_BG).pack(side="right")
             if e.get("summary"):
                 tk.Label(card, text=e["summary"], font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w",
                          justify="left", wraplength=620).pack(fill="x", padx=14, pady=(2, 0))
@@ -600,12 +653,9 @@ class AppWindow:
         page = ScrollFrame(parent, theme.BG)
         body = tk.Frame(page.inner, bg=theme.BG)
         body.pack(fill="both", expand=True, padx=32, pady=26)
-        tk.Label(body, text="Расписание задач", font=_font(18, True), bg=theme.BG, fg=theme.TEXT,
-                 anchor="w").pack(fill="x")
-        tk.Label(body, text="Работает, пока приложение запущено (оно живёт в трее). Каждая запланированная "
-                            "задача всё равно спросит подтверждение перед выполнением.",
-                 font=_font(10), fg=theme.TEXT_MUTED, bg=theme.BG, anchor="w", justify="left",
-                 wraplength=700).pack(fill="x", pady=(4, 14))
+        _page_hero(body, "Расписание задач",
+                   "Работает, пока приложение запущено (оно живёт в трее). Каждая запланированная задача "
+                   "всё равно спросит подтверждение перед выполнением.").pack(fill="x", pady=(0, 14))
 
         self._schedule_list = tk.Frame(body, bg=theme.BG)
         self._schedule_list.pack(fill="x")
@@ -615,22 +665,44 @@ class AppWindow:
         card = _card(body)
         card.pack(fill="x")
         form = tk.Frame(card, bg=theme.CARD_BG)
-        form.pack(fill="x", padx=14, pady=14)
-        tk.Label(form, text="Команда:", bg=theme.CARD_BG, fg=theme.TEXT, font=_font(10)).grid(row=0, column=0, sticky="w")
-        self._sch_cmd = tk.Entry(form, width=52, font=_font(10))
-        self._sch_cmd.grid(row=0, column=1, sticky="w", padx=8, pady=3)
-        tk.Label(form, text="Время (ЧЧ:ММ):", bg=theme.CARD_BG, fg=theme.TEXT, font=_font(10)).grid(row=1, column=0, sticky="w")
-        self._sch_time = tk.Entry(form, width=8, font=_font(10))
-        self._sch_time.insert(0, "09:00")
-        self._sch_time.grid(row=1, column=1, sticky="w", padx=8, pady=3)
+        form.pack(fill="x", padx=14, pady=(14, 4))
 
-        days_row = tk.Frame(card, bg=theme.CARD_BG)
-        days_row.pack(fill="x", padx=14)
+        tk.Label(form, text="Что сделать", font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
+                 anchor="w").pack(fill="x")
+        self._sch_cmd = tk.Entry(form, font=_font(11), relief="flat", bg=theme.INPUT_BG, fg=theme.TEXT,
+                                 insertbackground=theme.TEXT, highlightthickness=1,
+                                 highlightbackground=theme.BORDER, highlightcolor=theme.PRIMARY)
+        self._sch_cmd.pack(fill="x", ipady=5, pady=(3, 0))
+        tk.Label(form, text="Например: открой почту · сделай скриншот · включи youtube",
+                 font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w").pack(fill="x", pady=(2, 10))
+
+        tk.Label(form, text="Во сколько", font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
+                 anchor="w").pack(fill="x")
+        self._sch_time = _TimeField(form, "09:00")
+        self._sch_time.frame.pack(anchor="w", pady=(3, 10))
+
+        tk.Label(form, text="В какие дни", font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
+                 anchor="w").pack(fill="x")
+        presets = tk.Frame(form, bg=theme.CARD_BG)
+        presets.pack(fill="x", pady=(3, 4))
         self._sch_days = {}
+
+        def pick(keys):
+            for k, v in self._sch_days.items():
+                v.set(k in keys)
+
+        for text, keys in (("Будни", ("mon", "tue", "wed", "thu", "fri")),
+                           ("Каждый день", tuple(k for k, _ in DAYS)), ("Выходные", ("sat", "sun"))):
+            _button(presets, text, lambda ks=keys: pick(ks), "ghost", small=True).pack(side="left", padx=(0, 6))
+
+        days_row = tk.Frame(form, bg=theme.CARD_BG)
+        days_row.pack(fill="x", pady=(2, 0))
         for key, label in DAYS:
             var = tk.BooleanVar(master=self.root, value=key in ("mon", "tue", "wed", "thu", "fri"))
-            tk.Checkbutton(days_row, text=label, variable=var, bg=theme.CARD_BG, fg=theme.TEXT,
-                           activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG).pack(side="left")
+            tk.Checkbutton(days_row, text=label, variable=var, indicatoron=False, width=4, pady=5,
+                           font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.NAV_ACTIVE,
+                           selectcolor=theme.NAV_ACTIVE, relief="flat", bd=0, highlightthickness=1,
+                           highlightbackground=theme.BORDER, cursor="hand2").pack(side="left", padx=(0, 6))
             self._sch_days[key] = var
 
         self._sch_error = tk.Label(card, text="", font=_font(9), fg=theme.DANGER, bg=theme.CARD_BG, anchor="w")
@@ -644,8 +716,8 @@ class AppWindow:
             w.destroy()
         tasks = scheduler.get_all()
         if not tasks:
-            tk.Label(frame, text="Пока нет задач.", font=_font(10), fg=theme.TEXT_MUTED, bg=theme.BG,
-                     anchor="w").pack(fill="x", pady=4)
+            tk.Label(frame, text="Пока нет задач — добавь первую ниже.", font=_font(10), fg=theme.TEXT_MUTED,
+                     bg=theme.BG, anchor="w").pack(fill="x", pady=4)
             return
         for t in tasks:
             enabled = t.get("enabled", True)
@@ -653,13 +725,19 @@ class AppWindow:
             card.pack(fill="x", pady=4)
             row = tk.Frame(card, bg=theme.CARD_BG)
             row.pack(fill="x", padx=14, pady=10)
-            days = ", ".join(DAY_NAMES.get(d, d) for d in t.get("days", []))
-            tk.Label(row, text=f"{'✅' if enabled else '⏸️'}  {t.get('time')}  ·  {days}", font=_font(10, True),
-                     bg=theme.CARD_BG, fg=theme.TEXT if enabled else theme.TEXT_MUTED).pack(anchor="w")
-            tk.Label(row, text=t.get("command", ""), font=_font(10), bg=theme.CARD_BG, fg=theme.TEXT_MUTED,
-                     anchor="w", justify="left", wraplength=560).pack(side="left", fill="x", expand=True)
+            tk.Label(row, text=str(t.get("time", "")), font=_font(20, True), bg=theme.CARD_BG,
+                     fg=theme.PRIMARY if enabled else theme.TEXT_MUTED).pack(side="left", padx=(0, 16))
+            info = tk.Frame(row, bg=theme.CARD_BG)
+            info.pack(side="left", fill="x", expand=True)
+            tk.Label(info, text=t.get("command", ""), font=_font(10, True), bg=theme.CARD_BG,
+                     fg=theme.TEXT if enabled else theme.TEXT_MUTED, anchor="w", justify="left",
+                     wraplength=420).pack(fill="x")
+            sub = ("Один раз · " if t.get("once") else "") + _days_text(t.get("days", [])) + \
+                  ("" if enabled else " · выключено")
+            tk.Label(info, text=sub, font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w").pack(fill="x")
             _button(row, "Удалить", lambda tid=t["id"]: self._del_task(tid), "neutral", small=True).pack(side="right", padx=(6, 0))
-            _button(row, "Вкл/Выкл", lambda tid=t["id"], cur=enabled: self._toggle_task(tid, cur), "neutral",
+            _button(row, "Выключить" if enabled else "Включить",
+                    lambda tid=t["id"], cur=enabled: self._toggle_task(tid, cur), "neutral",
                     small=True).pack(side="right")
 
     def _toggle_task(self, task_id, current):
@@ -727,7 +805,7 @@ class AppWindow:
         page = ScrollFrame(parent, theme.BG)
         body = tk.Frame(page.inner, bg=theme.BG)
         body.pack(fill="both", expand=True, padx=32, pady=26)
-        tk.Label(body, text="Настройки", font=_font(18, True), bg=theme.BG, fg=theme.TEXT, anchor="w").pack(fill="x")
+        _page_hero(body, "Настройки", "Ключи Gemini, внешний вид, управление и голос. Не забудь нажать «Сохранить» внизу.").pack(fill="x")
 
         sv = self._sv = {}
 
@@ -1031,14 +1109,14 @@ class AppWindow:
 
     def _build_diag(self, parent):
         page = tk.Frame(parent, bg=theme.BG)
+        _page_hero(page, "Проверка системы",
+                   "Если что-то не работает (голос, ключи, автозагрузка) — причина обычно видна здесь.").pack(
+            fill="x", padx=32, pady=(26, 8))
         head = tk.Frame(page, bg=theme.BG)
-        head.pack(fill="x", padx=32, pady=(26, 4))
-        tk.Label(head, text="Проверка системы", font=_font(18, True), bg=theme.BG, fg=theme.TEXT).pack(side="left")
-        _button(head, "📋 Копировать", self._copy_diag, "neutral", small=True).pack(side="right", padx=(8, 0))
-        _button(head, "↻ Проверить снова", self.refresh, "neutral", small=True).pack(side="right")
-        _button(head, "🧾 Журнал действий", self._open_audit, "neutral", small=True).pack(side="right", padx=(0, 8))
-        tk.Label(page, text="Если что-то не работает (голос, ключи, автозагрузка) — причина обычно видна здесь.",
-                 font=_font(9), fg=theme.TEXT_MUTED, bg=theme.BG, anchor="w").pack(fill="x", padx=32)
+        head.pack(fill="x", padx=32)
+        _button(head, "🧾 Журнал действий", self._open_audit, "neutral", small=True).pack(side="left")
+        _button(head, "↻ Проверить снова", self.refresh, "neutral", small=True).pack(side="left", padx=8)
+        _button(head, "📋 Копировать", self._copy_diag, "neutral", small=True).pack(side="left")
         self._diag_box = scrolledtext.ScrolledText(page, font=theme.FONT_MONO, wrap="word", bd=0, relief="flat",
                                                    bg=theme.CARD_BG, fg=theme.TEXT, highlightthickness=1,
                                                    highlightbackground=theme.BORDER, padx=10, pady=8)
