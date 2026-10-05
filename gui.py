@@ -69,6 +69,19 @@ def _new_window(title: str, width: int, height: int, topmost: bool = True):
     return win
 
 
+def _header(win, title: str, subtitle: str = "", color: str = None, wrap: int = 520):
+    """Цветная шапка окна: крупный заголовок и (необязательно) пояснение белым текстом."""
+    color = color or "#4338CA"
+    band = tk.Frame(win, bg=color)
+    band.pack(fill="x")
+    tk.Label(band, text=title, font=("Segoe UI", 15, "bold"), bg=color, fg="white", anchor="w").pack(
+        fill="x", padx=18, pady=(14, 0 if subtitle else 14))
+    if subtitle:
+        tk.Label(band, text=subtitle, font=theme.FONT_BODY, bg=color, fg="#E8E9FF", anchor="w", justify="left",
+                 wraplength=wrap).pack(fill="x", padx=18, pady=(2, 14))
+    return band
+
+
 def _present(win):
     """Вытаскивает окно на передний план и даёт ему фокус."""
     try:
@@ -91,11 +104,13 @@ def _exists(win) -> bool:
 def ask_command() -> str:
     """Маленькое окно "Что сделать?" — открывается по горячей клавише поверх любых окон."""
     result = {"text": ""}
-    win = _new_window("AI Ассистент — команда", 520, 150)
+    win = _new_window("AI Ассистент — команда", 560, 190)
 
-    tk.Label(win, text="Что сделать?", font=theme.FONT_HEADING, bg=theme.BG).pack(pady=(12, 0))
-    entry = tk.Entry(win, font=("Segoe UI", 11), width=55)
-    entry.pack(pady=10)
+    _header(win, "Что сделать?", "Напиши команду и нажми Enter", wrap=520)
+    entry = tk.Entry(win, font=("Segoe UI", 12), relief="flat", bg=theme.INPUT_BG, fg=theme.TEXT,
+                     insertbackground=theme.TEXT, highlightthickness=1, highlightbackground=theme.BORDER,
+                     highlightcolor=theme.PRIMARY)
+    entry.pack(fill="x", padx=18, pady=(14, 10), ipady=6)
 
     def submit(event=None):
         result["text"] = entry.get()
@@ -103,8 +118,8 @@ def ask_command() -> str:
 
     entry.bind("<Return>", submit)
     entry.bind("<Escape>", lambda e: win.destroy())
-    tk.Button(win, text="Выполнить", bg=theme.PRIMARY, fg="white", font=theme.FONT_BODY,
-              relief="flat", command=submit).pack()
+    tk.Button(win, text="➤ Выполнить", bg=theme.PRIMARY, fg="white", font=("Segoe UI", 10, "bold"),
+              relief="flat", padx=16, command=submit).pack()
     _present(win)
     entry.focus_set()
     win.wait_window()
@@ -270,33 +285,26 @@ def _show_notification(message: str):
 def first_run_wizard() -> list:
     """Просит вписать бесплатный(е) Gemini-ключ(и) — можно несколько, по одному на строку."""
     result = {"keys": []}
-    win = _new_window("Добро пожаловать — настройка", 560, 520)
+    win = _new_window("Добро пожаловать — настройка", 580, 600)
 
-    try:
-        logo = ImageTk.PhotoImage(Image.open(theme.LOGO_64_PATH))
-        logo_label = tk.Label(win, image=logo, bg=theme.BG)
-        logo_label.image = logo
-        logo_label.pack(pady=(15, 0))
-    except Exception:
-        pass
-
-    tk.Label(win, text="Нужен бесплатный ключ Google Gemini",
-             font=theme.FONT_TITLE, bg=theme.BG).pack(pady=(10, 5))
+    _header(win, "Добро пожаловать!", "Для работы нужен бесплатный ключ Google Gemini — это занимает минуту.", wrap=540)
     instructions = (
-        "1. Открой aistudio.google.com\n"
-        "2. Войди через свой Google-аккаунт (Gmail)\n"
-        "3. Нажми 'Get API key' -> 'Create API key'\n"
-        "4. Скопируй ключ и вставь его ниже\n\n"
-        "Можно сразу вставить НЕСКОЛЬКО ключей (с разных Google-аккаунтов),\n"
-        "по одному на строку — тогда при лимите на одном приложение само\n"
-        "переключится на следующий."
+        "1.  Открой aistudio.google.com\n"
+        "2.  Войди через свой Google-аккаунт (Gmail)\n"
+        "3.  Нажми «Get API key» → «Create API key»\n"
+        "4.  Скопируй ключ и вставь его ниже\n\n"
+        "Можно вставить НЕСКОЛЬКО ключей (с разных Google-аккаунтов), по одному на строку — "
+        "тогда при лимите на одном программа сама переключится на следующий."
     )
-    tk.Label(win, text=instructions, justify="left", font=theme.FONT_BODY, bg=theme.BG).pack(pady=5, padx=20)
-    tk.Button(win, text="Открыть aistudio.google.com", bg=theme.PRIMARY, fg="white", relief="flat",
+    tk.Label(win, text=instructions, justify="left", font=theme.FONT_BODY, bg=theme.BG,
+             wraplength=530).pack(pady=(12, 5), padx=22, anchor="w")
+    tk.Button(win, text="🌐 Открыть aistudio.google.com", bg=theme.PRIMARY, fg="white", relief="flat",
+              font=("Segoe UI", 10, "bold"),
               command=lambda: webbrowser.open("https://aistudio.google.com/apikey")).pack(pady=5)
 
-    keys_box = scrolledtext.ScrolledText(win, width=58, height=5, font=theme.FONT_MONO)
-    keys_box.pack(pady=10, padx=20)
+    keys_box = scrolledtext.ScrolledText(win, width=58, height=5, font=theme.FONT_MONO, relief="flat",
+                                         highlightthickness=1, highlightbackground=theme.BORDER)
+    keys_box.pack(pady=10, padx=22, fill="x")
 
     def submit():
         lines = keys_box.get("1.0", tk.END).splitlines()
@@ -326,11 +334,9 @@ def confirm_agent_start(goal: str, intent: str, steps_text: list, max_steps: int
     auto_seconds > 0 — запустится само (для безопасных задач "просто открой"), отмена рядом.
     """
     result = {"ok": False}
-    win = _new_window("Автопилот — подтверждение", 580, 520)
+    win = _new_window("Автопилот — подтверждение", 600, 540)
 
-    tk.Label(win, text="🤖 Автопилот", font=theme.FONT_TITLE, bg=theme.BG).pack(pady=(14, 2))
-    tk.Label(win, text=f"Цель: {goal}", font=theme.FONT_BODY, bg=theme.BG,
-             wraplength=540, justify="left").pack(padx=18, anchor="w")
+    _header(win, "🤖 Автопилот", f"Цель: {goal}", wrap=560)
     tk.Label(win, text="ИИ посмотрел на экран и предлагает начать так:", font=theme.FONT_HEADING,
              bg=theme.BG).pack(padx=18, pady=(14, 2), anchor="w")
     if intent:
@@ -408,12 +414,12 @@ class ExecutionProgressWindow:
         exclude_from_capture(self.win)          # окно прогресса не должно попадать на скриншоты
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
 
-        tk.Label(self.win, text="Выполняю план действий", font=theme.FONT_HEADING, bg=theme.BG).pack(pady=(10, 5))
+        _header(self.win, "Выполняю план действий", "Окно можно не закрывать — оно покажет результат", wrap=520)
         list_frame = tk.Frame(self.win, bg=theme.BG)
-        list_frame.pack(fill="both", expand=True, padx=15)
+        list_frame.pack(fill="both", expand=True, padx=15, pady=(10, 0))
         for i, step in enumerate(steps):
-            text = f"{self.STATUS_ICON['pending']}  {i + 1}. {step.get('action')}: {_format_step_args(step)}"
-            lbl = tk.Label(list_frame, text=text, anchor="w", justify="left", font=theme.FONT_MONO,
+            text = f"{self.STATUS_ICON['pending']}  {i + 1}. {self._describe(step)}"
+            lbl = tk.Label(list_frame, text=text, anchor="w", justify="left", font=theme.FONT_BODY,
                            wraplength=520, bg=theme.BG)
             lbl.pack(anchor="w", pady=2)
             self._labels.append(lbl)
@@ -427,6 +433,14 @@ class ExecutionProgressWindow:
 
         _present(self.win)
         self.win.after(100, self._poll)
+
+    @staticmethod
+    def _describe(step: dict) -> str:
+        try:
+            import agent_loop
+            return agent_loop.describe_step(step)
+        except Exception:
+            return f"{step.get('action')}: {_format_step_args(step)}"
 
     # --- вызывается из рабочего потока ---
     def mark_step(self, index: int, status: str):
@@ -457,7 +471,7 @@ class ExecutionProgressWindow:
                     icon = self.STATUS_ICON.get(status, "•")
                     step = self.steps[idx]
                     self._labels[idx].config(
-                        text=f"{icon}  {idx + 1}. {step.get('action')}: {_format_step_args(step)}")
+                        text=f"{icon}  {idx + 1}. {self._describe(step)}")
                 else:
                     self._finished = True
                     self.status_label.config(text=item[1])
@@ -494,9 +508,10 @@ def exclude_from_capture(win):
 @on_ui
 def ask_yes_no(title: str, text: str, yes: str = "Да", no: str = "Нет") -> bool:
     result = {"ok": False}
-    win = _new_window(title, 520, 280)
-    tk.Label(win, text=title, font=theme.FONT_HEADING, bg=theme.BG).pack(pady=(16, 6))
-    tk.Label(win, text=text, font=theme.FONT_BODY, bg=theme.BG, wraplength=480, justify="left").pack(padx=20, pady=6)
+    win = _new_window(title, 540, 300)
+    _header(win, title, wrap=500)
+    tk.Label(win, text=text, font=theme.FONT_BODY, bg=theme.BG, wraplength=500, justify="left").pack(
+        padx=22, pady=14, anchor="w")
 
     def on_yes():
         result["ok"] = True
@@ -522,10 +537,11 @@ class VoiceWindow:
     def __init__(self):
         self.cancelled = threading.Event()
         self._queue = queue.Queue()
-        self.win = _new_window("Голосовая команда", 420, 270)
+        self.win = _new_window("Голосовая команда", 440, 330)
         self.win.protocol("WM_DELETE_WINDOW", self._cancel)
 
-        tk.Label(self.win, text="🎙", font=("Segoe UI", 38), bg=theme.BG, fg=theme.PRIMARY).pack(pady=(14, 0))
+        _header(self.win, "Голосовая команда", "Говори — я слушаю", wrap=400)
+        tk.Label(self.win, text="🎙", font=("Segoe UI", 38), bg=theme.BG, fg=theme.PRIMARY).pack(pady=(10, 0))
         self.state = tk.Label(self.win, text="Подключаю микрофон…", font=theme.FONT_HEADING, bg=theme.BG,
                               wraplength=380)
         self.state.pack(pady=(2, 6))
@@ -664,9 +680,7 @@ class AgentWindow:
         self.win = _new_window("Автопилот", 680, 620, topmost=False)
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
 
-        tk.Label(self.win, text="🤖 Автопилот", font=theme.FONT_HEADING, bg=theme.BG).pack(pady=(12, 2))
-        tk.Label(self.win, text=f"Цель: {goal}", font=theme.FONT_BODY, bg=theme.BG,
-                 wraplength=640, justify="left").pack(padx=16, anchor="w")
+        _header(self.win, "🤖 Автопилот", f"Цель: {goal}", wrap=640)
 
         self.preview_label = tk.Label(self.win, text="Здесь появится кадр, который видит ИИ (красный круг — куда он собирается нажать)",
                                       font=theme.FONT_BODY, fg=theme.TEXT_MUTED, bg=theme.BG)
