@@ -1006,7 +1006,8 @@ class AppWindow:
                        variable=sv["tg_approve"], bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG,
                        selectcolor=theme.INPUT_BG, font=_font(10), wraplength=640, justify="left").pack(anchor="w")
         for key, cfg, label in (("tg_trusted", "telegram_trusted_auto", "Безопасные быстрые команды (открыть сайт/программу, скрин) выполнять сразу, без вопроса"),
-                                ("tg_screen", "telegram_screen_after", "После задачи присылать скриншот экрана")):
+                                ("tg_screen", "telegram_screen_after", "После задачи присылать скриншот экрана"),
+                                ("tg_announce", "telegram_announce", "При запуске программы писать в Telegram «ассистент на связи»")):
             sv[key] = tk.BooleanVar(master=self.root, value=bool(cur.get(cfg, True)))
             tk.Checkbutton(s, text=label, variable=sv[key], bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG,
                            selectcolor=theme.INPUT_BG, font=_font(10), wraplength=640, justify="left").pack(anchor="w")
@@ -1233,6 +1234,7 @@ class AppWindow:
             "telegram_approve_in_chat": sv["tg_approve"].get(),
             "telegram_trusted_auto": sv["tg_trusted"].get(),
             "telegram_screen_after": sv["tg_screen"].get(),
+            "telegram_announce": sv["tg_announce"].get(),
             "telegram_token": sv["tg_token"].get().strip(),
             "telegram_clear_token": sv["tg_clear"].get(),
             "use_fallback_models": sv["use_fallback"].get(),

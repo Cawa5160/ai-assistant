@@ -189,17 +189,48 @@ HELP_TEXT = ("Я управляю компьютером как программ
              "• открой блокнот и напиши привет\n• найди на ютубе музыку для работы\n• сделай скрин вкладки ютуб\n"
              "• поставь таймер на 10 минут\n• запомни: пароль от wifi на холодильнике\n\n"
              "Команды:\n/screen — скриншот\n/screenfile — скриншот файлом (без сжатия)\n/status — что делает ассистент\n"
-             "/stop — остановить автопилот\n/history — последние команды\n/notes — заметки\n/macros — макросы\n"
+             "/stop — остановить автопилот\n/history — последние команды\n/notes — заметки\n/macros — макросы\n/windows — какие окна открыты\n"
              "/menu — кнопки\n\nВсе вопросы программы приходят сюда кнопками. Опасные действия (файлы, удаление, "
              "установка) спрашиваю дважды.\n\n🎙 Можно слать голосовые — я их распознаю и выполню.\n🖼 Пришли фото (с подписью-вопросом) — отвечу, что на нём.")
 
 
+def _post_retry(method, tries=3, **params):
+    """Запрос к Telegram; при «слишком часто» (429) подождать сколько просят и повторить."""
+    last = None
+    for _ in range(tries):
+        r = _call(method, http_timeout=15, **params)
+        if r.get("ok") or r.get("error_code") != 429:
+            return r
+        last = r
+        time.sleep(min(30, int((r.get("parameters") or {}).get("retry_after", 2)) + 1))
+    return last
+
+
+def _chunks(text: str, size: int = 3800):
+    text = str(text)
+    while len(text) > size:
+        cut = text.rfind("\n", 0, size)
+        cut = cut if cut > size // 2 else size
+        yield text[:cut]
+        text = text[cut:].lstrip("\n")
+    yield text
+
+
 def _send(chat_id, text: str, keyboard: bool = False):
     try:
-        extra = {"reply_markup": _KEYBOARD} if keyboard else {}
-        _call("sendMessage", http_timeout=15, chat_id=chat_id, text=text[:3900], **extra)
+        parts = list(_chunks(text))[:6]
+        for i, part in enumerate(parts):
+            extra = {"reply_markup": _KEYBOARD} if keyboard and i == len(parts) - 1 else {}
+            _post_retry("sendMessage", chat_id=chat_id, text=part or "…", **extra)
     except Exception as e:
         log(f"Telegram: не отправилось сообщение: {e}")
+
+
+def _typing(chat_id, action="typing"):
+    try:
+        _call("sendChatAction", http_timeout=8, chat_id=chat_id, action=action)
+    except Exception:
+        pass
 
 
 def _send_photo(chat_id, image) -> bool:
@@ -365,14 +396,14 @@ def _too_chatty(uid) -> bool:
     return len(times) > MAX_MSGS_PER_HOUR
 
 
-def _download(file_id: str, limit: int = 10 * 1024 * 1024):
+def _download(file_id: str, limit: int = 14 * 1024 * 1024):
     """Скачивает файл из Telegram -> (bytes, путь на сервере)."""
     r = _call("getFile", http_timeout=20, file_id=file_id)
     if not r.get("ok"):
         raise RuntimeError(str(r.get("description", "не удалось получить файл")))
     info = r["result"]
     if int(info.get("file_size") or 0) > limit:
-        raise ValueError("Файл слишком большой (больше 10 МБ).")
+        raise ValueError("Файл слишком большой (больше 14 МБ).")
     path = info["file_path"]
     resp = requests.get(f"{API}/file/bot{get_token()}/{path}", timeout=60)
     resp.raise_for_status()
@@ -398,6 +429,7 @@ def _media_of(msg: dict):
 def _handle_media(msg, chat, uid, name, kind, file_id, mime):
     import media_input
     caption = (msg.get("caption") or "").strip()
+    _typing(chat, "record_voice" if kind == "audio" else "typing")
     try:
         data, _path = _download(file_id)
         if kind == "audio":
@@ -479,10 +511,18 @@ def _handle(msg: dict, from_voice: bool = False):
             log(f"Telegram: скриншот не сделан: {e}")
             _send(chat, f"Не удалось сделать скриншот: {e}")
         return
+    if low.startswith("/windows"):
+        fn = _hooks.get("windows")
+        _send(chat, redact(str(fn())) if fn else "Недоступно.")
+        return
+    if low.startswith("/") and re.match(r"^/[a-z_]+\b", low):
+        _send(chat, "Не знаю такую команду. Посмотри список: /help")
+        return
     if _on_command is None:
         _send(chat, "Ассистент сейчас не может принять команду.")
         return
     log(f"Telegram: команда от {name}: {redact(text)[:120]}")
+    _typing(chat)
     _send(chat, "⏳ Принято, работаю. Если нужно подтверждение — пришлю кнопки.")
     threading.Thread(target=_run_command, args=(chat, text, uid, name), daemon=True).start()
 
@@ -516,11 +556,29 @@ def _register_commands(token):
             {"command": "status", "description": "Что делает ассистент"},
             {"command": "stop", "description": "Остановить автопилот"},
             {"command": "history", "description": "Последние команды"},
+            {"command": "windows", "description": "Какие окна открыты"},
             {"command": "notes", "description": "Заметки"},
             {"command": "macros", "description": "Макросы"},
             {"command": "help", "description": "Справка"}])
     except Exception as e:
         log(f"Telegram: меню команд не установилось: {e}")
+
+
+_announced = False
+
+
+def _announce_online():
+    """Один раз за запуск программы сообщает подтверждённым пользователям, что ассистент на связи."""
+    global _announced
+    import config
+    if _announced or not config.get("telegram_announce"):
+        return
+    _announced = True
+    for u in users():
+        try:
+            _send(u["id"] if isinstance(u, dict) and "id" in u else u, "🟢 Ассистент на связи (компьютер включён). /menu — кнопки.", keyboard=True)
+        except Exception:
+            pass
 
 
 def _loop(stop):
@@ -545,6 +603,7 @@ def _loop(stop):
             if not registered:
                 registered = True
                 _register_commands(token)
+                _announce_online()
             for upd in r.get("result", []):
                 offset = upd["update_id"] + 1
                 try:

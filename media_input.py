@@ -9,7 +9,7 @@ import os
 import ai_brain
 from logger import log
 
-MAX_BYTES = 10 * 1024 * 1024
+MAX_BYTES = 14 * 1024 * 1024      # Gemini принимает запрос до 20 МБ, а base64 раздувает файл на треть
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 AUDIO_EXT = {".ogg", ".oga", ".opus", ".mp3", ".wav", ".m4a", ".aac", ".flac"}
 _MIME_FIX = {".oga": "audio/ogg", ".opus": "audio/ogg", ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".aac": "audio/aac",
@@ -37,7 +37,7 @@ def _ask(parts, max_tokens=1024, temperature=0.2) -> str:
 
 def _part(data: bytes, mime: str) -> dict:
     if len(data) > MAX_BYTES:
-        raise ValueError("Файл слишком большой (больше 10 МБ).")
+        raise ValueError("Файл слишком большой (больше 14 МБ).")
     return {"inline_data": {"mime_type": mime, "data": base64.b64encode(data).decode("ascii")}}
 
 

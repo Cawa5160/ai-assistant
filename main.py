@@ -497,7 +497,31 @@ def _tg_macros() -> str:
     return "⚙️ Макросы:\n" + "\n".join(f"• {k}" for k in m) + "\n\nЗапуск: напиши название."
 
 
-TELEGRAM_HOOKS = {"status": _tg_status, "stop": _tg_stop, "history": _tg_history, "notes": _tg_notes, "macros": _tg_macros}
+def _tg_windows() -> str:
+    """Список открытых окон (только Windows)."""
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        titles = []
+        proc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+        def cb(hwnd, _):
+            if user32.IsWindowVisible(hwnd):
+                n = user32.GetWindowTextLengthW(hwnd)
+                if n:
+                    buf = ctypes.create_unicode_buffer(n + 1)
+                    user32.GetWindowTextW(hwnd, buf, n + 1)
+                    if buf.value.strip() and buf.value not in ("Program Manager", "Settings"):
+                        titles.append(buf.value.strip())
+            return True
+        user32.EnumWindows(proc(cb), 0)
+        titles = list(dict.fromkeys(titles))
+        return "🪟 Открытые окна:\n" + "\n".join(f"• {t[:90]}" for t in titles[:30]) if titles else "Окон не найдено."
+    except Exception as e:
+        return f"Не удалось получить список окон: {e}"
+
+
+TELEGRAM_HOOKS = {"windows": _tg_windows, "status": _tg_status, "stop": _tg_stop, "history": _tg_history, "notes": _tg_notes, "macros": _tg_macros}
 
 
 def on_telegram_command(text: str, user_id, user_name) -> str:
@@ -649,6 +673,7 @@ def apply_settings(values: dict):
         "telegram_enabled": bool(values.get("telegram_enabled", False)),
         "telegram_approve_in_chat": bool(values.get("telegram_approve_in_chat", True)),
         "telegram_trusted_auto": bool(values.get("telegram_trusted_auto", True)),
+        "telegram_announce": bool(values.get("telegram_announce", True)),
         "telegram_screen_after": bool(values.get("telegram_screen_after", True)),
         "hotkey_open_window": values["hotkey_open_window"],
         "hotkey_voice": values.get("hotkey_voice", "ctrl+shift+v"),

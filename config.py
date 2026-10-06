@@ -13,7 +13,7 @@ BASE_DIR = DATA_DIR  # рядом со скриптом (или рядом с .e
 SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
 LOG_FILE = os.path.join(BASE_DIR, "action_log.txt")
 
-APP_VERSION = "1.23.0"
+APP_VERSION = "1.24.0"
 SETTINGS_VERSION = 2  # растёт, когда меняются значения по умолчанию, которые нужно применить и старым установкам
 
 DEFAULTS = {
@@ -26,6 +26,7 @@ DEFAULTS = {
     "telegram_approve_in_chat": True,   # подтверждать обычные действия кнопками в Telegram (опасные — только на ПК)
     "telegram_trusted_auto": True,   # безопасные быстрые команды из Telegram (сайт, приложение, скрин) — без вопросов
     "telegram_screen_after": True,   # после задачи из Telegram присылать скриншот экрана
+    "telegram_announce": True,   # при запуске программы писать в Telegram «ассистент на связи»
     "telegram_enabled": False,   # управление из Telegram (токен хранится отдельно, см. telegram_bot.py)
     "use_fallback_models": True,   # при лимите основной модели пробовать запасные (лимит у каждой модели свой)
     "fallback_models": ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
