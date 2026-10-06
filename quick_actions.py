@@ -146,6 +146,13 @@ _MONTHS = ["января", "февраля", "марта", "апреля", "ма
 def try_quick_action(command: str, notify):
     """-> (описание, функция) или None. notify(заголовок, текст) нужен для таймера."""
     command = command or ""
+    try:
+        import clipboard_tools
+        clip = clipboard_tools.try_clipboard_action(command)
+        if clip is not None:
+            return clip
+    except Exception as e:
+        log(f"Буфер обмена: {e}")
     if _TIME.match(command):
         import datetime
         return ("Сказать время", lambda: "Сейчас " + datetime.datetime.now().strftime("%H:%M"))

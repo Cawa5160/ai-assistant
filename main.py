@@ -521,7 +521,13 @@ def _tg_windows() -> str:
         return f"Не удалось получить список окон: {e}"
 
 
-TELEGRAM_HOOKS = {"windows": _tg_windows, "status": _tg_status, "stop": _tg_stop, "history": _tg_history, "notes": _tg_notes, "macros": _tg_macros}
+def _tg_clip() -> str:
+    import clipboard_tools
+    t = clipboard_tools.get_text()
+    return ("📋 Буфер обмена:\n" + t[:3500]) if t.strip() else "Буфер обмена пуст (или там не текст)."
+
+
+TELEGRAM_HOOKS = {"clip": _tg_clip, "windows": _tg_windows, "status": _tg_status, "stop": _tg_stop, "history": _tg_history, "notes": _tg_notes, "macros": _tg_macros}
 
 
 def on_telegram_command(text: str, user_id, user_name) -> str:

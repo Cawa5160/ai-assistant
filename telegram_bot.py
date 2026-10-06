@@ -189,7 +189,7 @@ HELP_TEXT = ("Я управляю компьютером как программ
              "• открой блокнот и напиши привет\n• найди на ютубе музыку для работы\n• сделай скрин вкладки ютуб\n"
              "• поставь таймер на 10 минут\n• запомни: пароль от wifi на холодильнике\n\n"
              "Команды:\n/screen — скриншот\n/screenfile — скриншот файлом (без сжатия)\n/status — что делает ассистент\n"
-             "/stop — остановить автопилот\n/history — последние команды\n/notes — заметки\n/macros — макросы\n/windows — какие окна открыты\n"
+             "/stop — остановить автопилот\n/history — последние команды\n/notes — заметки\n/macros — макросы\n/windows — какие окна открыты\n/clip — что в буфере обмена\n"
              "/menu — кнопки\n\nВсе вопросы программы приходят сюда кнопками. Опасные действия (файлы, удаление, "
              "установка) спрашиваю дважды.\n\n🎙 Можно слать голосовые — я их распознаю и выполню.\n🖼 Пришли фото (с подписью-вопросом) — отвечу, что на нём.")
 
@@ -511,8 +511,8 @@ def _handle(msg: dict, from_voice: bool = False):
             log(f"Telegram: скриншот не сделан: {e}")
             _send(chat, f"Не удалось сделать скриншот: {e}")
         return
-    if low.startswith("/windows"):
-        fn = _hooks.get("windows")
+    if low.startswith(("/windows", "/clip")):
+        fn = _hooks.get("windows" if low.startswith("/windows") else "clip")
         _send(chat, redact(str(fn())) if fn else "Недоступно.")
         return
     if low.startswith("/") and re.match(r"^/[a-z_]+\b", low):
@@ -556,6 +556,7 @@ def _register_commands(token):
             {"command": "status", "description": "Что делает ассистент"},
             {"command": "stop", "description": "Остановить автопилот"},
             {"command": "history", "description": "Последние команды"},
+            {"command": "clip", "description": "Что в буфере обмена"},
             {"command": "windows", "description": "Какие окна открыты"},
             {"command": "notes", "description": "Заметки"},
             {"command": "macros", "description": "Макросы"},
