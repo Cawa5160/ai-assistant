@@ -191,7 +191,7 @@ HELP_TEXT = ("Я управляю компьютером как программ
              "Команды:\n/screen — скриншот\n/screenfile — скриншот файлом (без сжатия)\n/status — что делает ассистент\n"
              "/stop — остановить автопилот\n/history — последние команды\n/notes — заметки\n/macros — макросы\n"
              "/menu — кнопки\n\nВсе вопросы программы приходят сюда кнопками. Опасные действия (файлы, удаление, "
-             "установка) спрашиваю дважды.")
+             "установка) спрашиваю дважды.\n\n🎙 Можно слать голосовые — я их распознаю и выполню.\n🖼 Пришли фото (с подписью-вопросом) — отвечу, что на нём.")
 
 
 def _send(chat_id, text: str, keyboard: bool = False):
@@ -365,7 +365,58 @@ def _too_chatty(uid) -> bool:
     return len(times) > MAX_MSGS_PER_HOUR
 
 
-def _handle(msg: dict):
+def _download(file_id: str, limit: int = 10 * 1024 * 1024):
+    """Скачивает файл из Telegram -> (bytes, путь на сервере)."""
+    r = _call("getFile", http_timeout=20, file_id=file_id)
+    if not r.get("ok"):
+        raise RuntimeError(str(r.get("description", "не удалось получить файл")))
+    info = r["result"]
+    if int(info.get("file_size") or 0) > limit:
+        raise ValueError("Файл слишком большой (больше 10 МБ).")
+    path = info["file_path"]
+    resp = requests.get(f"{API}/file/bot{get_token()}/{path}", timeout=60)
+    resp.raise_for_status()
+    return resp.content, path
+
+
+def _media_of(msg: dict):
+    """-> (вид, file_id, mime) для голосового/аудио/фото/картинки-файла, иначе None."""
+    if msg.get("voice"):
+        return "audio", msg["voice"]["file_id"], msg["voice"].get("mime_type") or "audio/ogg"
+    if msg.get("audio"):
+        return "audio", msg["audio"]["file_id"], msg["audio"].get("mime_type") or "audio/mp3"
+    if msg.get("video_note"):
+        return None
+    if msg.get("photo"):
+        return "image", msg["photo"][-1]["file_id"], "image/jpeg"
+    doc = msg.get("document") or {}
+    if str(doc.get("mime_type", "")).startswith("image/"):
+        return "image", doc["file_id"], doc["mime_type"]
+    return None
+
+
+def _handle_media(msg, chat, uid, name, kind, file_id, mime):
+    import media_input
+    caption = (msg.get("caption") or "").strip()
+    try:
+        data, _path = _download(file_id)
+        if kind == "audio":
+            _send(chat, "🎙 Слушаю…")
+            text = media_input.transcribe(data, mime.split(";")[0])
+            if not text:
+                _send(chat, "Не расслышал речь в этом сообщении. Попробуй ещё раз или напиши текстом.")
+                return
+            _send(chat, f"🎙 Распознал: «{redact(text)[:500]}»")
+            _handle({**msg, "voice": None, "audio": None, "text": text, "caption": None}, from_voice=True)
+        else:
+            _send(chat, "🖼 Смотрю…")
+            _send(chat, redact(media_input.ask_image(data, mime, caption))[:3800])
+    except Exception as e:
+        log(f"Telegram: не удалось обработать вложение: {e}")
+        _send(chat, f"❌ Не получилось обработать вложение: {redact(str(e))[:300]}")
+
+
+def _handle(msg: dict, from_voice: bool = False):
     user = msg.get("from") or {}
     uid = user.get("id")
     chat = (msg.get("chat") or {}).get("id")
@@ -373,7 +424,8 @@ def _handle(msg: dict):
         return                                           # только личные чаты
     name = " ".join(x for x in (user.get("first_name"), user.get("last_name")) if x) or user.get("username") or str(uid)
     text = (msg.get("text") or "").strip()
-    if not text:
+    media = None if text else _media_of(msg)
+    if not text and not media:
         return
 
     if not is_allowed(uid):
@@ -393,6 +445,9 @@ def _handle(msg: dict):
                     "(Настройки → Telegram). Код действует 10 минут. Не отправляй его никому другому.")
         return
 
+    if media:
+        threading.Thread(target=_handle_media, args=(msg, chat, uid, name) + media, daemon=True).start()
+        return
     text = _MENU_BUTTONS.get(text, text)
     low = text.lower().split("@")[0]
     if low.startswith(("/start", "/help", "/menu")) or low in ("помощь", "меню", "help"):

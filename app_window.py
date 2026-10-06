@@ -405,7 +405,7 @@ class AppWindow:
         body.pack(fill="both", expand=True, padx=32, pady=26)
 
         _hero(body, "Привет! Я AI Ассистент 👋",
-              "Напиши, что нужно сделать, или нажми на микрофон. Я посмотрю на экран и выполню это по шагам, "
+              "Напиши, что нужно сделать, нажми на микрофон или приложи картинку/аудио. Я посмотрю на экран и выполню это по шагам, "
               "а на опасные действия всегда спрошу разрешения.").pack(fill="x", pady=(0, 18))
 
         self._busy_banner = tk.Label(body, text="", font=_font(10, True), bg=theme.NAV_ACTIVE, fg=theme.PRIMARY,
@@ -422,6 +422,7 @@ class AppWindow:
                               padx=6, pady=4, highlightthickness=0)
         self._input.pack(side="left", fill="both", expand=True)
         _button(buttons, "🎙 Голосом", self._on_mic, "neutral", small=True).pack(side="top", pady=(0, 6), fill="x")
+        _button(buttons, "📎 Файл", self._on_attach, "neutral", small=True).pack(side="top", pady=(0, 6), fill="x")
         _button(buttons, "➤ Выполнить", self._on_send, "primary", small=True).pack(side="top", fill="x")
         self._input.bind("<Return>", self._on_enter)
 
@@ -491,6 +492,21 @@ class AppWindow:
             return
         self._input.delete("1.0", "end")
         self.c.submit_command(text)
+
+    def _on_attach(self):
+        """Картинка (спросить про неё — вопрос берётся из поля ввода) или аудиофайл (распознать речь и выполнить)."""
+        if self._busy:
+            self._flash("Дождись завершения текущей команды — она ещё выполняется.")
+            return
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(parent=self.root, title="Картинка или аудио", filetypes=[
+            ("Картинки и аудио", "*.png *.jpg *.jpeg *.webp *.gif *.bmp *.ogg *.oga *.opus *.mp3 *.wav *.m4a *.aac *.flac"),
+            ("Все файлы", "*.*")])
+        if not path:
+            return
+        question = self._input.get("1.0", "end").strip()
+        self._input.delete("1.0", "end")
+        self.c.attach_file(path, question)
 
     def _on_mic(self):
         if self._busy:

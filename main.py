@@ -20,6 +20,7 @@ AI-ассистент для управления компьютером (Window
 Одновременно выполняется только ОДНА команда, второй экземпляр не запускается
 (повторный запуск показывает окно уже работающего).
 """
+import os
 import sys
 import time
 import threading
@@ -691,6 +692,33 @@ def quit_app():
         ui_thread.post(_app.quit)
 
 
+def _on_attached_file(path: str, question: str = ""):
+    """Файл из окна программы: картинка -> ответ на вопрос про неё; аудио -> распознать речь и выполнить как команду."""
+    import media_input
+    kind = media_input.kind_of(path)
+    if not kind:
+        notify("AI Ассистент", "Поддерживаются картинки (png, jpg, webp…) и аудио (ogg, mp3, wav, m4a…).")
+        return
+    try:
+        data = media_input.read_file(path)
+        if kind == "audio":
+            notify("AI Ассистент", "Распознаю речь из файла…")
+            text = media_input.transcribe(data, media_input.mime_of(path))
+            if not text:
+                notify("AI Ассистент", "В файле не нашлось речи.")
+                return
+            notify("AI Ассистент", f"Распознано: «{text[:120]}»")
+            process_command(text)
+        else:
+            notify("AI Ассистент", "Смотрю на картинку…")
+            answer = media_input.ask_image(data, media_input.mime_of(path), question)
+            gui.ask_yes_no("🖼 Ответ про картинку", answer[:1800], yes="Понятно", no="Закрыть")
+            history.add(f"Картинка: {os.path.basename(path)} {question}".strip(), "вопрос про картинку", answer[:200])
+    except Exception as e:
+        log(f"Файл не обработан: {e}")
+        notify("Ошибка", f"Не получилось обработать файл: {e}")
+
+
 class Controller:
     """То, что главное окно может попросить у приложения (окно ничего не знает про потоки и ИИ)."""
 
@@ -699,6 +727,9 @@ class Controller:
 
     def voice_command(self):
         threading.Thread(target=on_voice_command, daemon=True).start()
+
+    def attach_file(self, path, question=""):
+        threading.Thread(target=_on_attached_file, args=(path, question), daemon=True).start()
 
     def repeat(self, command):
         self.submit_command(command)
