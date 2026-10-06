@@ -29,6 +29,7 @@ NAV = [
     ("home", "🏠", "Главная"),
     ("history", "🕘", "История"),
     ("schedule", "📅", "Расписание"),
+    ("memory", "🧠", "Макросы и заметки"),
     ("settings", "⚙️", "Настройки"),
     ("diag", "🩺", "Проверка системы"),
 ]
@@ -792,6 +793,111 @@ class AppWindow:
             scheduler.add_task(command, days, when, condition=cond)
             self._sch_cmd.delete(0, "end")
             self._refresh_schedule()
+
+    # ===================== МАКРОСЫ, ЗАМЕТКИ, ШАБЛОНЫ =====================
+
+    def _build_memory(self, parent):
+        page = ScrollFrame(parent, theme.BG)
+        body = tk.Frame(page.inner, bg=theme.BG)
+        body.pack(fill="both", expand=True, padx=32, pady=26)
+        _page_hero(body, "Макросы, заметки и шаблоны",
+                   "Всё, что ассистент запомнил. Макрос — шаги последней команды («запомни как утро»); заметка — факт о тебе; "
+                   "шаблон — набор быстрых команд.").pack(fill="x", pady=(0, 6))
+        self._mem_box = tk.Frame(body, bg=theme.BG)
+        self._mem_box.pack(fill="x")
+        return page
+
+    def _mem_title(self, parent, text, hint=""):
+        tk.Label(parent, text=text, font=_font(13, True), bg=theme.BG, fg=theme.TEXT, anchor="w").pack(fill="x", pady=(18, 2))
+        if hint:
+            tk.Label(parent, text=hint, font=_font(9), bg=theme.BG, fg=theme.TEXT_MUTED, anchor="w", justify="left",
+                     wraplength=680).pack(fill="x", pady=(0, 6))
+
+    def _mem_row(self, parent, title, sub, buttons):
+        card = _card(parent)
+        card.pack(fill="x", pady=4)
+        row = tk.Frame(card, bg=theme.CARD_BG)
+        row.pack(fill="x", padx=14, pady=10)
+        info = tk.Frame(row, bg=theme.CARD_BG)
+        info.pack(side="left", fill="x", expand=True)
+        tk.Label(info, text=title, font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT, anchor="w", justify="left",
+                 wraplength=430).pack(fill="x")
+        if sub:
+            tk.Label(info, text=sub, font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w", justify="left",
+                     wraplength=430).pack(fill="x")
+        for text, cmd, kind in buttons:
+            _button(row, text, cmd, kind, small=True).pack(side="right", padx=(6, 0))
+
+    def _refresh_memory(self):
+        import agent_loop
+        import macros
+        import templates
+        box = self._mem_box
+        for w in box.winfo_children():
+            w.destroy()
+
+        self._mem_title(box, "Макросы", "Чтобы создать: выполни команду и скажи «запомни как <имя>». Клики в макросе привязаны к местам на экране.")
+        mac = macros.list_macros()
+        if not mac:
+            tk.Label(box, text="Макросов пока нет.", font=_font(10), bg=theme.BG, fg=theme.TEXT_MUTED, anchor="w").pack(fill="x")
+        for name, m in mac.items():
+            steps = m.get("steps", [])
+            sub = f"{len(steps)} шаг.: " + "; ".join(agent_loop.describe_step(x) for x in steps if x.get("action") != "wait")[:200]
+            self._mem_row(box, name, sub, [
+                ("Удалить", lambda n=name: (macros.delete_macro(n), self._refresh_memory()), "neutral"),
+                ("▶ Запустить", lambda n=name: self.c.repeat(f"макрос {n}"), "primary")])
+
+        self._mem_title(box, "Заметки", "Факты о тебе — ИИ видит их при выполнении команд (как данные, не как приказы).")
+        for i, n in enumerate(macros.notes()):
+            self._mem_row(box, n, "", [("Удалить", lambda k=i: (macros.delete_note(k), self._refresh_memory()), "neutral")])
+        card = _card(box)
+        card.pack(fill="x", pady=4)
+        row = tk.Frame(card, bg=theme.CARD_BG)
+        row.pack(fill="x", padx=14, pady=10)
+        entry = tk.Entry(row, font=_font(11), relief="flat", bg=theme.INPUT_BG, fg=theme.TEXT, insertbackground=theme.TEXT,
+                         highlightthickness=1, highlightbackground=theme.BORDER, highlightcolor=theme.PRIMARY)
+        err = tk.Label(card, text="", font=_font(9), fg=theme.DANGER, bg=theme.CARD_BG, anchor="w")
+
+        def add():
+            ok, msg = macros.add_note(entry.get())
+            if ok:
+                self._refresh_memory()
+            else:
+                err.config(text=msg)
+        _button(row, "➕ Запомнить", add, "success", small=True).pack(side="right", padx=(8, 0))
+        entry.pack(side="left", fill="x", expand=True, ipady=4)
+        err.pack(fill="x", padx=14, pady=(0, 6))
+
+        self._mem_title(box, "Шаблоны", "Несколько быстрых команд под одним именем и с одним подтверждением. Запуск: «шаблон <имя>» (и в Telegram, и в расписании).")
+        user = templates.user_templates()
+        for name, items in templates.all_templates().items():
+            builtin = name in templates.BUILTIN and name not in user
+            btns = [("▶ Запустить", lambda n=name: self.c.repeat(f"шаблон {n}"), "primary")]
+            if not builtin:
+                btns.insert(0, ("Удалить", lambda n=name: (templates.delete_template(n), self._refresh_memory()), "neutral"))
+            self._mem_row(box, name + ("  (встроенный)" if builtin else ""), "; ".join(items), btns)
+        card = _card(box)
+        card.pack(fill="x", pady=4)
+        form = tk.Frame(card, bg=theme.CARD_BG)
+        form.pack(fill="x", padx=14, pady=10)
+        tk.Label(form, text="Новый шаблон: имя и команды через «;»", font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED,
+                 anchor="w").pack(fill="x")
+        e_name = tk.Entry(form, font=_font(11), relief="flat", bg=theme.INPUT_BG, fg=theme.TEXT, insertbackground=theme.TEXT,
+                          highlightthickness=1, highlightbackground=theme.BORDER, highlightcolor=theme.PRIMARY, width=16)
+        e_name.pack(side="left", ipady=4, pady=(4, 0))
+        e_items = tk.Entry(form, font=_font(11), relief="flat", bg=theme.INPUT_BG, fg=theme.TEXT, insertbackground=theme.TEXT,
+                           highlightthickness=1, highlightbackground=theme.BORDER, highlightcolor=theme.PRIMARY)
+        e_items.pack(side="left", fill="x", expand=True, ipady=4, padx=(8, 0), pady=(4, 0))
+        terr = tk.Label(card, text="", font=_font(9), fg=theme.DANGER, bg=theme.CARD_BG, anchor="w", justify="left", wraplength=620)
+
+        def add_tpl():
+            ok, msg = templates.add_template(e_name.get(), e_items.get())
+            if ok:
+                self._refresh_memory()
+            else:
+                terr.config(text=msg)
+        _button(form, "➕ Создать", add_tpl, "success", small=True).pack(side="right", padx=(8, 0), pady=(4, 0))
+        terr.pack(fill="x", padx=14, pady=(0, 6))
 
     # ===================== НАСТРОЙКИ =====================
 

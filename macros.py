@@ -162,3 +162,40 @@ def try_macro_plan(command: str):
     if not mac:
         return None
     return {"summary": f"Макрос «{name}»", "steps": mac.get("steps", []), "need_vision": False, "trusted": False}
+
+
+# ---------- для окна программы ----------
+
+def delete_macro(name: str) -> bool:
+    data = list_macros()
+    if name.strip().lower() in data:
+        data.pop(name.strip().lower())
+        atomic_io.write_json(MACROS_PATH, data)
+        return True
+    return False
+
+
+def delete_note(index: int) -> bool:
+    items = notes()
+    if 0 <= index < len(items):
+        items.pop(index)
+        atomic_io.write_json(NOTES_PATH, items)
+        return True
+    return False
+
+
+def add_note(text: str):
+    """-> (ok, сообщение)."""
+    text = (text or "").strip()
+    if len(text) < 3:
+        return False, "Слишком коротко."
+    if len(text) > MAX_NOTE_LEN:
+        return False, f"Не длиннее {MAX_NOTE_LEN} символов."
+    if redact(text) != text:
+        return False, "Похоже на пароль/ключ — такое в заметки не сохраняю."
+    items = notes()
+    if len(items) >= MAX_NOTES:
+        return False, f"Заметок уже {MAX_NOTES} — удали лишние."
+    items.append(text)
+    atomic_io.write_json(NOTES_PATH, items)
+    return True, "Сохранено."

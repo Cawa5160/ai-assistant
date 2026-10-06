@@ -114,3 +114,21 @@ def try_template_action(command: str):
             return f"Шаблон «{name}» удалён."
         return (f"Удалить шаблон «{name}»", delete)
     return None
+
+
+def delete_template(name: str) -> bool:
+    d = user_templates()
+    if name in d:
+        d.pop(name)
+        atomic_io.write_json(PATH, d)
+        return True
+    return False
+
+
+def add_template(name: str, items_text: str):
+    """-> (ok, сообщение). Команды через «;»."""
+    action = try_template_action(f"создай шаблон {name.strip()}: {items_text.strip()}")
+    if action is None:
+        return False, "Введи имя и команды через «;»."
+    msg = action[1]()
+    return msg.startswith("Шаблон «"), msg
