@@ -62,6 +62,8 @@ from quick_commands import try_quick_plan
 from quick_actions import try_quick_action
 import key_manager
 import macros
+import templates
+import wakeword
 import telegram_bot
 from logger import log
 
@@ -585,7 +587,7 @@ def process_command(user_command: str):
         elif config.get("view_only"):
             outcome = _run_view_only(user_command)
         else:
-            plan = macros.try_macro_plan(user_command) or try_quick_plan(user_command) or try_local_plan(user_command)
+            plan = macros.try_macro_plan(user_command) or templates.try_template_plan(user_command) or try_quick_plan(user_command) or try_local_plan(user_command)
             if plan is not None:
                 outcome = _run_local_plan(user_command, plan)
             else:
@@ -688,11 +690,19 @@ def apply_settings(values: dict):
         "voice_device": values.get("voice_device", ""),
         "allowed_folders": values["allowed_folders"],
         "voice_feedback_enabled": values["voice_feedback_enabled"],
+        "voice_wake_enabled": bool(values.get("voice_wake_enabled", False)),
         "voice_language": values["voice_language"],
         "local_model_enabled": values["local_model_enabled"],
         "local_model_name": values["local_model_name"],
     })
     action_executor.sync_pyautogui_settings()
+    try:
+        if config.get("voice_wake_enabled"):
+            wakeword.restart(_on_wake_word, _command_lock.locked)
+        else:
+            wakeword.stop()
+    except Exception as e:
+        log(f"Слово-активатор: {e}")
     try:
         if values.get("telegram_clear_token"):
             telegram_bot.set_token("")
@@ -863,6 +873,25 @@ def register_hotkeys():
                     pass
 
 
+def _on_wake_word(rest: str):
+    """Услышано «эй, ассистент»: с командой — выполняем, без — открываем обычное окно прослушивания."""
+    try:
+        import winsound
+        winsound.Beep(1000, 120)
+    except Exception:
+        pass
+    if _command_lock.locked():
+        return
+    if rest.strip():
+        process_command(rest.strip())
+    else:
+        on_voice_command()
+
+
+def _on_schedule_skipped(command: str, cond: str):
+    notify("Расписание", f"Задача «{command[:60]}» пропущена: условие «{cond}» не выполнилось за 30 минут.")
+
+
 def on_scheduled_command(command: str):
     threading.Thread(target=process_command, args=(command,), daemon=True).start()
 
@@ -900,8 +929,9 @@ def main():
         register_hotkeys()
         icon = setup_tray()
         threading.Thread(target=icon.run, daemon=True).start()
-        scheduler.start(on_scheduled_command)
+        scheduler.start(on_scheduled_command, _on_schedule_skipped)
         telegram_bot.start(on_telegram_command, TELEGRAM_HOOKS)
+        wakeword.start(_on_wake_word, _command_lock.locked)
         ui_thread.post(_startup, background)
         log("Приложение работает. Крестик окна сворачивает его в трей; выход — кнопка в окне или меню трея.")
         _app.run()

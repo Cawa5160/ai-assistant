@@ -151,6 +151,10 @@ def try_quick_action(command: str, notify):
         clip = clipboard_tools.try_clipboard_action(command)
         if clip is not None:
             return clip
+        import templates
+        tpl = templates.try_template_action(command)
+        if tpl is not None:
+            return tpl
     except Exception as e:
         log(f"Буфер обмена: {e}")
     if _TIME.match(command):

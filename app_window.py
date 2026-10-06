@@ -698,6 +698,15 @@ class AppWindow:
         self._sch_time = _TimeField(form, "09:00")
         self._sch_time.frame.pack(anchor="w", pady=(3, 10))
 
+        tk.Label(form, text="Условие запуска", font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
+                 anchor="w").pack(fill="x")
+        self._sch_cond = tk.StringVar(master=self.root, value=scheduler.CONDITIONS[""])
+        from tkinter import ttk
+        ttk.Combobox(form, textvariable=self._sch_cond, values=list(scheduler.CONDITIONS.values()), state="readonly",
+                     width=52).pack(anchor="w", pady=(3, 2))
+        tk.Label(form, text=f"Если условие не выполнено в назначенное время, подожду до {scheduler.WAIT_MIN} минут.",
+                 font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w").pack(fill="x", pady=(0, 10))
+
         tk.Label(form, text="В какие дни", font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
                  anchor="w").pack(fill="x")
         presets = tk.Frame(form, bg=theme.CARD_BG)
@@ -750,6 +759,7 @@ class AppWindow:
                      fg=theme.TEXT if enabled else theme.TEXT_MUTED, anchor="w", justify="left",
                      wraplength=420).pack(fill="x")
             sub = ("Один раз · " if t.get("once") else "") + _days_text(t.get("days", [])) + \
+                  (f" · {scheduler.CONDITIONS.get(t['condition'], t['condition'])}" if t.get("condition") else "") + \
                   ("" if enabled else " · выключено")
             tk.Label(info, text=sub, font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w").pack(fill="x")
             _button(row, "Удалить", lambda tid=t["id"]: self._del_task(tid), "neutral", small=True).pack(side="right", padx=(6, 0))
@@ -777,7 +787,9 @@ class AppWindow:
             self._sch_error.config(text="Отметь хотя бы один день недели.")
         else:
             self._sch_error.config(text="")
-            scheduler.add_task(command, days, when)
+            label = self._sch_cond.get()
+            cond = next((k for k, v in scheduler.CONDITIONS.items() if v == label), "")
+            scheduler.add_task(command, days, when, condition=cond)
             self._sch_cmd.delete(0, "end")
             self._refresh_schedule()
 
@@ -929,6 +941,15 @@ class AppWindow:
         tk.Checkbutton(s, text="Озвучивать действия голосом (офлайн)", variable=sv["voice_feedback"], bg=theme.CARD_BG,
                        fg=theme.TEXT, activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
                        font=_font(10)).pack(anchor="w")
+        sv["voice_wake"] = tk.BooleanVar(master=self.root, value=cur.get("voice_wake_enabled", False))
+        tk.Checkbutton(s, text="Слушать «Эй, ассистент» без кнопки (микрофон работает постоянно)", variable=sv["voice_wake"],
+                       bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
+                       font=_font(10)).pack(anchor="w")
+        tk.Label(s, text="Звук нигде не хранится. Каждая услышанная фраза (до 5 секунд) отправляется на бесплатное "
+                         "распознавание Google, чтобы найти слово «ассистент»; без него фраза выбрасывается. "
+                         "Включай, только если тебя это устраивает. Сказанная команда всё равно спросит подтверждение.",
+                 font=_font(9), fg=theme.TEXT_MUTED, bg=theme.CARD_BG, anchor="w", justify="left",
+                 wraplength=640).pack(fill="x", pady=(2, 6))
         self._field_label(s, "Язык голосовых команд")
         sv["voice_language"] = tk.StringVar(master=self.root, value=cur.get("voice_language", "ru-RU"))
         row = tk.Frame(s, bg=theme.CARD_BG)
@@ -1224,6 +1245,7 @@ class AppWindow:
             "hotkey_open_window": sv["hotkey"].get().strip() or "ctrl+shift+a",
             "allowed_folders": [l.strip() for l in self._s_folders.get("1.0", "end").splitlines() if l.strip()],
             "voice_feedback_enabled": sv["voice_feedback"].get(),
+            "voice_wake_enabled": sv["voice_wake"].get(),
             "voice_language": sv["voice_language"].get(),
             "local_model_enabled": sv["local_enabled"].get(),
             "local_model_name": sv["local_name"].get().strip() or "qwen2.5:3b",
