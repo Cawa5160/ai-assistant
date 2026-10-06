@@ -6,9 +6,9 @@
   * новому пользователю программа генерирует одноразовый код из 16 символов (живёт 10 минут) и показывает
     его в чате; чтобы получить доступ, владелец должен в ПРОГРАММЕ (Настройки → Telegram) ввести этот код —
     значит, подтверждает человек, сидящий за компьютером;
-  * команды из Telegram НИКОГДА не запускаются сами: нужно нажать «Разрешить» — кнопкой в чате (для обычных
-    действий, если включено в настройках) или на компьютере; опасные действия (файлы, установка, удаление) —
-    ТОЛЬКО на компьютере;
+  * обычные действия из Telegram подтверждаются кнопками в чате; ОПАСНЫЕ (файлы, установка, удаление) —
+    двойным подтверждением там же; без ответа 3 минуты действие отменяется; безопасные быстрые команды
+    (открыть сайт/приложение, скрин) можно выполнять сразу — это настройка;
   * токен бота хранится в защищённом хранилище Windows (если оно есть);
   * в самом чате пароли и ключи маскируются (privacy.redact), экран бот присылает только по команде /screen.
 Работает на обычных HTTPS-запросах (long polling), без дополнительных библиотек.
@@ -44,6 +44,7 @@ _stop = threading.Event()      # у каждого запуска свой Event
 _state = {"running": False, "bot": "", "error": ""}
 _approvals = {}      # токен кнопки -> {"uid","event","result"} (ожидание ответа «Разрешить/Отмена»)
 _on_command = None   # callable(text, user_id, user_name) — выполняет команду на компьютере
+_hooks = {}          # status/stop/history/notes/macros -> callable() -> str (даёт main.py)
 
 
 # ---------- хранение ----------
@@ -178,9 +179,25 @@ def _call(method: str, token: str = None, http_timeout: int = 35, **params):
     return r.json()
 
 
-def _send(chat_id, text: str):
+_MENU_BUTTONS = {
+    "📸 Скрин": "/screen", "📊 Статус": "/status", "🛑 Стоп": "/stop", "📜 История": "/history",
+    "🗒 Заметки": "/notes", "🔊 Громче": "громче", "🔉 Тише": "тише", "⏯ Пауза": "пауза", "🖥 Рабочий стол": "покажи рабочий стол",
+}
+_KEYBOARD = {"keyboard": [["📸 Скрин", "📊 Статус", "🛑 Стоп"], ["🔊 Громче", "🔉 Тише", "⏯ Пауза"],
+                          ["📜 История", "🗒 Заметки", "🖥 Рабочий стол"]], "resize_keyboard": True, "is_persistent": True}
+HELP_TEXT = ("Я управляю компьютером как программа на нём. Просто пиши что сделать, например:\n"
+             "• открой блокнот и напиши привет\n• найди на ютубе музыку для работы\n• сделай скрин вкладки ютуб\n"
+             "• поставь таймер на 10 минут\n• запомни: пароль от wifi на холодильнике\n\n"
+             "Команды:\n/screen — скриншот\n/screenfile — скриншот файлом (без сжатия)\n/status — что делает ассистент\n"
+             "/stop — остановить автопилот\n/history — последние команды\n/notes — заметки\n/macros — макросы\n"
+             "/menu — кнопки\n\nВсе вопросы программы приходят сюда кнопками. Опасные действия (файлы, удаление, "
+             "установка) спрашиваю дважды.")
+
+
+def _send(chat_id, text: str, keyboard: bool = False):
     try:
-        _call("sendMessage", http_timeout=15, chat_id=chat_id, text=text[:3900])
+        extra = {"reply_markup": _KEYBOARD} if keyboard else {}
+        _call("sendMessage", http_timeout=15, chat_id=chat_id, text=text[:3900], **extra)
     except Exception as e:
         log(f"Telegram: не отправилось сообщение: {e}")
 
@@ -220,13 +237,17 @@ def _wants_screen(text: str) -> bool:
     return t.startswith("/screen") or (len(t) <= 80 and bool(_SCREEN_WORDS.search(t)))
 
 
-def ask_approval(uid, text: str, timeout: int = 180):
-    """Присылает сообщение с кнопками «Разрешить / Отмена» и ждёт ответа. -> True / False / None (время вышло)."""
+def ask_approval(uid, text: str, timeout: int = 180, danger: bool = False):
+    """Присылает сообщение с кнопками «Разрешить / Отмена» и ждёт ответа.
+    -> True (разрешил) / False (отказ или время вышло) / None (не удалось отправить кнопки)."""
     tok = secrets.token_hex(5)
     ev = threading.Event()
     with _lock:
         _approvals[tok] = {"uid": uid, "event": ev, "result": None}
-    markup = {"inline_keyboard": [[{"text": "✅ Разрешить", "callback_data": f"ok:{tok}"},
+    yes = "⚠️ Понимаю риск, выполнить" if danger else "✅ Разрешить"
+    markup = {"inline_keyboard": [[{"text": yes, "callback_data": f"ok:{tok}"}],
+                                  [{"text": "❌ Отмена", "callback_data": f"no:{tok}"}]] if danger else
+                                 [[{"text": yes, "callback_data": f"ok:{tok}"},
                                    {"text": "❌ Отмена", "callback_data": f"no:{tok}"}]]}
     mid = None
     try:
@@ -248,7 +269,62 @@ def ask_approval(uid, text: str, timeout: int = 180):
             pass
     if result is None:
         _send(uid, "⌛ Время на подтверждение вышло — действие отменено.")
+        return False
     return result
+
+
+def ask_danger(uid, text: str):
+    """Опасное действие: два раздельных подтверждения подряд."""
+    first = ask_approval(uid, "⚠️ ОПАСНОЕ ДЕЙСТВИЕ\n\n" + text, danger=True)
+    if first is not True:
+        return first
+    return ask_approval(uid, "Последний вопрос: точно выполнить?\n\n" + text[:600], timeout=120, danger=True)
+
+
+class Progress:
+    """Одно сообщение в чате, которое обновляется по ходу работы автопилота."""
+
+    def __init__(self, chat_id, title: str):
+        self.chat, self.title, self.lines, self.mid, self.last = chat_id, title, [], None, 0.0
+        self._push(force=True)
+
+    def add(self, line: str):
+        self.lines = (self.lines + [redact(line)[:160]])[-8:]
+        self._push()
+
+    def _push(self, force=False):
+        if not force and time.time() - self.last < 1.5:
+            return
+        self.last = time.time()
+        text = self.title + ("\n\n" + "\n".join(self.lines) if self.lines else "")
+        try:
+            if self.mid is None:
+                r = _call("sendMessage", http_timeout=15, chat_id=self.chat, text=text[:3500])
+                self.mid = (r.get("result") or {}).get("message_id")
+            else:
+                _call("editMessageText", http_timeout=15, chat_id=self.chat, message_id=self.mid, text=text[:3500])
+        except Exception:
+            pass
+
+
+def send_screen(chat_id, as_file: bool = False, caption: str = ""):
+    import screen_utils
+    img = screen_utils.take_screenshot_color(2400 if as_file else 1600)
+    if not as_file:
+        return _send_photo(chat_id, img)
+    try:
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        buf.seek(0)
+        r = requests.post(f"{API}/bot{get_token()}/sendDocument", data={"chat_id": chat_id, "caption": caption},
+                          files={"document": ("screen.png", buf, "image/png")}, timeout=90)
+        if not r.json().get("ok"):
+            raise RuntimeError(str(r.json().get("description")))
+        return True
+    except Exception as e:
+        log(f"Telegram: файл со скриншотом не отправился: {e}")
+        _send(chat_id, f"Не получилось отправить файл: {str(e)[:200]}")
+        return False
 
 
 def _handle_callback(cb: dict):
@@ -317,11 +393,23 @@ def _handle(msg: dict):
                     "(Настройки → Telegram). Код действует 10 минут. Не отправляй его никому другому.")
         return
 
-    if text.startswith("/start") or text.startswith("/help"):
-        _send(chat, "Команды:\n/screen — скриншот экрана\n/help — эта справка\n\nЛюбой другой текст — команда "
-                    "ассистенту (например: «открой блокнот и напиши привет»). На компьютере нужно будет нажать "
-                    "«Разрешить» — сам по себе он ничего не запускает.")
+    text = _MENU_BUTTONS.get(text, text)
+    low = text.lower().split("@")[0]
+    if low.startswith(("/start", "/help", "/menu")) or low in ("помощь", "меню", "help"):
+        _send(chat, HELP_TEXT, keyboard=True)
         return
+    if low.startswith("/screenfile"):
+        threading.Thread(target=send_screen, args=(chat, True, time.strftime("%d.%m.%Y %H:%M:%S")), daemon=True).start()
+        return
+    for cmd, key, title in (("/status", "status", "Статус"), ("/stop", "stop", "Стоп"), ("/history", "history", "История"),
+                            ("/notes", "notes", "Заметки"), ("/macros", "macros", "Макросы")):
+        if low.startswith(cmd):
+            fn = _hooks.get(key)
+            try:
+                _send(chat, redact(str(fn())) if fn else f"{title}: недоступно.")
+            except Exception as e:
+                _send(chat, f"{title}: ошибка — {e}")
+            return
     target = _screen_target(text) if _wants_screen(text) and not text.startswith("/screen") else ""
     if target and _on_command is not None:
         log(f"Telegram: скриншот с действием от {name}: {redact(text)[:120]}")
@@ -340,7 +428,7 @@ def _handle(msg: dict):
         _send(chat, "Ассистент сейчас не может принять команду.")
         return
     log(f"Telegram: команда от {name}: {redact(text)[:120]}")
-    _send(chat, "⏳ Принято. Подтверди выполнение на компьютере.")
+    _send(chat, "⏳ Принято, работаю. Если нужно подтверждение — пришлю кнопки.")
     threading.Thread(target=_run_command, args=(chat, text, uid, name), daemon=True).start()
 
 
@@ -358,14 +446,32 @@ def _run_screen_target(chat, target, uid, name):
 def _run_command(chat, text, uid, name):
     try:
         result = _on_command(text, uid, name)
-        _send(chat, "✅ " + redact(str(result or "Готово"))[:1500])
+        if result:                    # пустой ответ — программа уже написала итог в чат сама
+            _send(chat, "✅ " + redact(str(result))[:1500])
     except Exception as e:
         _send(chat, f"❌ Не получилось: {redact(str(e))[:300]}")
+
+
+def _register_commands(token):
+    try:
+        _call("setMyCommands", token=token, http_timeout=15, commands=[
+            {"command": "menu", "description": "Кнопки быстрых действий"},
+            {"command": "screen", "description": "Скриншот экрана"},
+            {"command": "screenfile", "description": "Скриншот файлом (без сжатия)"},
+            {"command": "status", "description": "Что делает ассистент"},
+            {"command": "stop", "description": "Остановить автопилот"},
+            {"command": "history", "description": "Последние команды"},
+            {"command": "notes", "description": "Заметки"},
+            {"command": "macros", "description": "Макросы"},
+            {"command": "help", "description": "Справка"}])
+    except Exception as e:
+        log(f"Telegram: меню команд не установилось: {e}")
 
 
 def _loop(stop):
     offset = None
     fails = 0
+    registered = False
     while not stop.is_set():
         token = get_token()
         if not token:
@@ -381,6 +487,9 @@ def _loop(stop):
                 raise RuntimeError(str(r.get("description", "ошибка Telegram")))
             _state["error"] = ""
             fails = 0
+            if not registered:
+                registered = True
+                _register_commands(token)
             for upd in r.get("result", []):
                 offset = upd["update_id"] + 1
                 try:
@@ -399,11 +508,14 @@ def _loop(stop):
     _state["running"] = False
 
 
-def start(on_command):
+def start(on_command, hooks=None):
     """Запускает бота, если он включён в настройках и есть токен."""
     global _thread, _on_command, _stop
     import config
     _on_command = on_command
+    if hooks is not None:
+        _hooks.clear()
+        _hooks.update(hooks)
     if not config.get("telegram_enabled") or not get_token():
         return False
     if _thread and _thread.is_alive():
@@ -421,11 +533,11 @@ def stop():
     reject_all()
 
 
-def restart(on_command=None):
+def restart(on_command=None, hooks=None):
     stop()
     global _thread
     _thread = None            # старый поток доработает текущий запрос и сам завершится (у него свой Event)
-    return start(on_command or _on_command)
+    return start(on_command or _on_command, hooks)
 
 
 def status() -> str:

@@ -75,7 +75,14 @@ COLOR_ERROR = "#f44336"
 
 
 def notify(title: str, message: str):
-    """Нативное Windows-уведомление, а если не вышло — небольшое окно."""
+    """Нативное Windows-уведомление, а если не вышло — небольшое окно. Для команды из Telegram — ещё и сообщение в чат."""
+    if _is_remote():
+        try:
+            telegram_bot._send(_remote.uid, f"{redact(str(title))}: {redact(str(message))}"[:1500])
+            _remote.mirrored = True
+            return
+        except Exception as e:
+            log(f"Не отправилось в Telegram: {e}")
     if not notifications.notify(title, message):
         gui.show_notification(message)
 
@@ -166,11 +173,15 @@ def _run_local_plan(user_command: str, plan: dict) -> str:
             auto = max(0, min(30, int(config.get("auto_confirm_seconds"))))
         except Exception:
             auto = 0
-    chat_answer = _approve_in_chat(summary, steps, dangerous)
+    chat_answer = None
+    if _is_remote() and config.get("telegram_trusted_auto") and plan.get("trusted") and not dangerous \
+            and all(plan_validator.classify_risk(st) == "low" for st in steps):
+        chat_answer = True            # безопасная быстрая команда (открыть сайт/приложение, скрин) — без лишних вопросов
+    else:
+        chat_answer = _approve_in_chat(summary, steps, dangerous)
     if chat_answer is True:
         confirmed_steps = steps
-    elif chat_answer is False or (chat_answer is None and _is_remote() and config.get("telegram_approve_in_chat")
-                                  and not dangerous and plan_validator.highest_risk(steps) != "high"):
+    elif chat_answer is False:
         confirmed_steps = None            # отказ или время вышло в Telegram
     else:
         confirmed_steps = gui.confirm_plan(display_summary, steps, auto_seconds=auto, manual=_is_remote())
@@ -184,6 +195,8 @@ def _run_local_plan(user_command: str, plan: dict) -> str:
         return "ok"
 
     voice_output.speak(f"Выполняю. {summary}")
+    if _is_remote():
+        _remote.screen = True
     progress = gui.open_progress_window(confirmed_steps)
     worker = threading.Thread(target=run_steps_with_progress, args=(confirmed_steps, progress), daemon=True)
     worker.start()
@@ -293,11 +306,8 @@ def _run_agent_visible(user_command: str, on_wait) -> str:
     max_steps = int(config.get("agent_max_steps"))
 
     chat_ok = _approve_in_chat(f"Цель: {user_command}\nАвтопилот сам будет смотреть на экран и действовать (до {max_steps} шагов). "
-                               "Опасные шаги он спросит отдельно, на компьютере.\n\nНачнёт так:\n" + "\n".join(steps_text),
+                               "Каждый опасный шаг спрошу отдельно здесь же.\n\nНачнёт так:\n" + "\n".join(steps_text),
                                decision["steps"], False, "Запустить автопилот?")
-    if chat_ok is None and _is_remote() and config.get("telegram_approve_in_chat") and \
-            not any(plan_validator.classify_risk(st) == "high" for st in decision["steps"]):
-        chat_ok = False
     if chat_ok is not None:
         start_ok = chat_ok
     else:
@@ -312,6 +322,9 @@ def _run_agent_visible(user_command: str, on_wait) -> str:
     global _active_agent
     window = gui.open_agent_window(user_command, max_steps)
     _active_agent = window
+    if _is_remote():
+        _remote.screen = True
+        window = _RemoteAgentUI(window, _remote.uid, user_command)
     result = {"ok": False, "message": "Остановлено пользователем."}
 
     def worker():
@@ -367,7 +380,11 @@ def _run_view_only(user_command: str) -> str:
         return "error"
     finally:
         _restore_own_windows()
-    gui.ask_yes_no("👁 Ответ (режим «только смотреть»)", answer[:1500], yes="Понятно", no="Закрыть")
+    if _is_remote():
+        telegram_bot._send(_remote.uid, "👁 " + redact(answer)[:1500])
+        _remote.mirrored = True
+    else:
+        gui.ask_yes_no("👁 Ответ (режим «только смотреть»)", answer[:1500], yes="Понятно", no="Закрыть")
     history.add(user_command, "только смотреть", answer[:200])
     return "ok"
 
@@ -378,12 +395,13 @@ def _offer_retry_after_limit(user_command: str):
         if not key_manager.all_daily_exhausted():
             return
         when = key_manager.next_daily_reset()
-        agree = gui.ask_yes_no(
-            "Дневной лимит Gemini исчерпан",
-            f"Лимит обновится около {when:%H:%M} (по твоему времени, {when:%d.%m}).\n\n"
-            f"Повторить команду автоматически?\n«{redact(user_command)[:120]}»\n\n"
-            "Компьютер должен быть включён, программа — работать в фоне.",
-            yes="Да, повторить", no="Нет")
+        q = (f"Лимит обновится около {when:%H:%M} (по твоему времени, {when:%d.%m}).\n\n"
+             f"Повторить команду автоматически?\n«{redact(user_command)[:120]}»\n\n"
+             "Компьютер должен быть включён, программа — работать в фоне.")
+        if _is_remote():
+            agree = telegram_bot.ask_approval(_remote.uid, "Дневной лимит Gemini исчерпан\n\n" + q) is True
+        else:
+            agree = gui.ask_yes_no("Дневной лимит Gemini исчерпан", q, yes="Да, повторить", no="Нет")
         if agree:
             scheduler.add_task(user_command, [scheduler.WEEKDAYS[when.weekday()]], when.strftime("%H:%M"), once=True)
             notify("AI Ассистент", f"Повторю команду в {when:%H:%M}.")
@@ -399,37 +417,115 @@ def _is_remote() -> bool:
 
 
 def _approve_in_chat(summary: str, steps: list, dangerous: bool, title: str = "Подтверди действия"):
-    """Команда пришла из Telegram: обычные действия подтверждаем кнопками в чате. -> True/False или None (нужно окно на ПК)."""
+    """Команда пришла из Telegram: подтверждаем кнопками в чате (опасное — двойным подтверждением).
+    -> True/False, либо None (в чат не получилось написать — спросим на компьютере)."""
     if not (_is_remote() and config.get("telegram_approve_in_chat")):
         return None
-    if dangerous or any(plan_validator.classify_risk(st) == "high" for st in steps):
-        telegram_bot._send(_remote.uid, "⚠️ В плане есть действия с высоким риском (файлы, установка, удаление) — "
-                                        "подтверди их на компьютере.")
-        return None
+    risky = dangerous or any(plan_validator.classify_risk(st) == "high" for st in steps)
     lines = []
     for i, st in enumerate(steps[:12], 1):
         lines.append(f"{i}. {redact(agent_loop.describe_step(st))}")
     more = f"\n…и ещё {len(steps) - 12}" if len(steps) > 12 else ""
     text = f"{title}\n\n{redact(summary)}\n\n" + "\n".join(lines) + more
+    if risky:
+        return telegram_bot.ask_danger(_remote.uid, text)
     return telegram_bot.ask_approval(_remote.uid, text)
 
 
+class _RemoteAgentUI:
+    """Окно автопилота для команды из Telegram: всё как на ПК, но шаги и вопросы идут ещё и в чат."""
+
+    def __init__(self, win, uid, goal):
+        self._win, self._uid = win, uid
+        self._progress = telegram_bot.Progress(uid, f"🤖 Автопилот: {redact(goal)[:100]}")
+
+    def __getattr__(self, name):
+        return getattr(self._win, name)
+
+    def add_step(self, n, text):
+        self._win.add_step(n, text)
+        self._progress.add(f"{n}. {text}")
+
+    def request_confirm(self, text):
+        if config.get("telegram_approve_in_chat"):
+            ans = telegram_bot.ask_danger(self._uid, redact(str(text)))
+            if ans is not None:
+                return bool(ans)
+        return self._win.request_confirm(text)
+
+    def finish(self, ok, message):
+        self._progress.add(("✅ " if ok else "⛔ ") + str(message))
+        self._win.finish(ok, message)
+
+
+def _tg_status() -> str:
+    state = "занят" if _command_lock.locked() else "свободен"
+    agent = "работает" if _active_agent is not None else "не запущен"
+    return (f"📊 Ассистент v{config.APP_VERSION}: {state}\nАвтопилот: {agent}\n"
+            f"Ключей Gemini: {len(key_manager.get_keys()) if hasattr(key_manager, 'get_keys') else '—'}\n"
+            f"Время на ПК: {time.strftime('%H:%M:%S %d.%m.%Y')}")
+
+
+def _tg_stop() -> str:
+    window = _active_agent
+    if window is None:
+        return "Автопилот сейчас не работает."
+    window.abort_event.set()
+    return "🛑 Останавливаю автопилот…"
+
+
+def _tg_history() -> str:
+    items = history.get_all()[:6]
+    if not items:
+        return "История пуста."
+    return "📜 Последние команды:\n\n" + "\n\n".join(
+        f"{i.get('time', '')[5:16]}  {i.get('command', '')[:80]}\n→ {str(i.get('status', ''))[:120]}" for i in items)
+
+
+def _tg_notes() -> str:
+    n = macros.notes()
+    if not n:
+        return "Заметок нет. Напиши: «запомни: …»."
+    return "🗒 Заметки:\n" + "\n".join(f"• {x if isinstance(x, str) else x.get('text', x)}" for x in n[-20:])
+
+
+def _tg_macros() -> str:
+    m = macros.list_macros()
+    if not m:
+        return "Макросов нет. Выполни действие и скажи «запомни это как <название>»."
+    return "⚙️ Макросы:\n" + "\n".join(f"• {k}" for k in m) + "\n\nЗапуск: напиши название."
+
+
+TELEGRAM_HOOKS = {"status": _tg_status, "stop": _tg_stop, "history": _tg_history, "notes": _tg_notes, "macros": _tg_macros}
+
+
 def on_telegram_command(text: str, user_id, user_name) -> str:
-    """Выполняет команду из Telegram (подтверждение — на компьютере) и возвращает короткий итог для чата."""
+    """Выполняет команду из Telegram и возвращает короткий итог для чата ('' — итог уже отправлен в чат)."""
     started = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - 1))
     _remote.on = True
     _remote.uid = user_id
+    _remote.mirrored = False
+    _remote.screen = False
     try:
         process_command(text)
     finally:
         _remote.on = False
+    result = "Готово"
     try:
         last = history.get_all()[0]
         if last.get("time", "") >= started:
-            return last.get("status") or last.get("summary") or "Готово"
+            result = last.get("status") or last.get("summary") or "Готово"
     except Exception:
         pass
-    return "Готово"
+    if _remote.screen and config.get("telegram_screen_after"):
+        time.sleep(1.0)
+        try:
+            telegram_bot.send_screen(user_id)
+        except Exception as e:
+            log(f"Telegram: скриншот после задачи не отправился: {e}")
+    if _remote.mirrored:
+        return ""
+    return result
 
 
 def process_command(user_command: str):
@@ -551,6 +647,8 @@ def apply_settings(values: dict):
         "auto_confirm_seconds": values.get("auto_confirm_seconds", 5),
         "telegram_enabled": bool(values.get("telegram_enabled", False)),
         "telegram_approve_in_chat": bool(values.get("telegram_approve_in_chat", True)),
+        "telegram_trusted_auto": bool(values.get("telegram_trusted_auto", True)),
+        "telegram_screen_after": bool(values.get("telegram_screen_after", True)),
         "hotkey_open_window": values["hotkey_open_window"],
         "hotkey_voice": values.get("hotkey_voice", "ctrl+shift+v"),
         "hotkey_stop": values.get("hotkey_stop", "ctrl+shift+s"),
@@ -569,7 +667,7 @@ def apply_settings(values: dict):
         elif values.get("telegram_token"):
             telegram_bot.set_token(values["telegram_token"])
         if values.get("telegram_enabled"):
-            telegram_bot.restart(on_telegram_command)
+            telegram_bot.restart(on_telegram_command, TELEGRAM_HOOKS)
         else:
             telegram_bot.stop()
     except Exception as e:
@@ -741,7 +839,7 @@ def main():
         icon = setup_tray()
         threading.Thread(target=icon.run, daemon=True).start()
         scheduler.start(on_scheduled_command)
-        telegram_bot.start(on_telegram_command)
+        telegram_bot.start(on_telegram_command, TELEGRAM_HOOKS)
         ui_thread.post(_startup, background)
         log("Приложение работает. Крестик окна сворачивает его в трей; выход — кнопка в окне или меню трея.")
         _app.run()
