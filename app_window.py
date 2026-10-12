@@ -836,7 +836,34 @@ class AppWindow:
         for w in box.winfo_children():
             w.destroy()
 
-        self._mem_title(box, "Макросы", "Чтобы создать: выполни команду и скажи «запомни как <имя>». Клики в макросе привязаны к местам на экране.")
+        self._mem_title(box, "Макросы", "Выполни команду, потом впиши название ниже (или скажи «запомни как <имя>»). Клики в макросе привязаны к местам на экране.")
+        import action_executor
+        recent = [x for x in action_executor.RECENT_STEPS]
+        card = _card(box)
+        card.pack(fill="x", pady=4)
+        row = tk.Frame(card, bg=theme.CARD_BG)
+        row.pack(fill="x", padx=14, pady=10)
+        tk.Label(row, text=(f"Последняя команда: {len(recent)} шаг." if recent else "Сначала выполни любую команду — её шаги можно сохранить."),
+                 font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w").pack(fill="x")
+        row2 = tk.Frame(card, bg=theme.CARD_BG)
+        row2.pack(fill="x", padx=14, pady=(0, 6))
+        m_name = tk.Entry(row2, font=_font(11), relief="flat", bg=theme.INPUT_BG, fg=theme.TEXT, insertbackground=theme.TEXT,
+                          highlightthickness=1, highlightbackground=theme.BORDER, highlightcolor=theme.PRIMARY)
+        m_err = tk.Label(card, text="", font=_font(9), fg=theme.DANGER, bg=theme.CARD_BG, anchor="w", justify="left", wraplength=620)
+
+        def save_last():
+            name = m_name.get().strip()
+            if not name:
+                m_err.config(text="Впиши название макроса.")
+                return
+            ok, msg = macros.save_macro(name, list(action_executor.RECENT_STEPS))
+            if ok:
+                self._refresh_memory()
+            else:
+                m_err.config(text=msg)
+        _button(row2, "💾 Сохранить как макрос", save_last, "success", small=True).pack(side="right", padx=(8, 0))
+        m_name.pack(side="left", fill="x", expand=True, ipady=4)
+        m_err.pack(fill="x", padx=14, pady=(0, 6))
         mac = macros.list_macros()
         if not mac:
             tk.Label(box, text="Макросов пока нет.", font=_font(10), bg=theme.BG, fg=theme.TEXT_MUTED, anchor="w").pack(fill="x")

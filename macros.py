@@ -22,7 +22,11 @@ NOTES_PATH = os.path.join(DATA_DIR, "notes.json")
 MAX_MACROS, MAX_NOTES, MAX_NOTE_LEN = 50, 30, 200
 NOTE_ACTIONS_SKIP = set()
 
-_SAVE_MACRO = re.compile(r"^\s*(?:запомни|сохрани)\s+как\s+(?P<name>[^\n]{1,40}?)\s*[.!]*\s*$", re.I)
+_SAVE_MACRO = re.compile(
+    r"^\s*(?:пожалуйста[,\s]+)?(?:запомни|запиши|сохрани|создай)\s+(?:это\s+|эту\s+команду\s+|эти\s+действия\s+|последнюю\s+команду\s+)?"
+    r"(?:как\s+)?(?:макрос\s+)?(?:под\s+именем\s+|с\s+названием\s+|называется\s+)?(?P<name>[^\n]{1,40}?)\s*[.!]*\s*$", re.I)
+_SAVE_MACRO_STRICT = re.compile(r"^\s*(?:запомни|запиши|сохрани|создай)\s+(?:это\s+|эту\s+команду\s+|эти\s+действия\s+|последнюю\s+команду\s+)?"
+                                r"(?:как\s+(?:макрос\s+)?|макрос\s+)", re.I)
 _RUN_MACRO = re.compile(r"^\s*(?:запусти\s+|выполни\s+)?макрос\s+(?P<name>[^\n]{1,40}?)\s*[.!]*\s*$", re.I)
 _DEL_MACRO = re.compile(r"^\s*(?:удали|забудь)\s+макрос\s+(?P<name>[^\n]{1,40}?)\s*[.!]*\s*$", re.I)
 _LIST_MACROS = re.compile(r"^\s*(?:мои\s+макросы|список\s+макросов|покажи\s+макросы)\s*[.!]*\s*$", re.I)
@@ -97,7 +101,7 @@ def save_macro(name: str, steps: list):
 def try_memory_command(command: str, recent_steps: list):
     """Команды без плана действий. -> (описание, функция->текст) или None."""
     command = command or ""
-    m = _SAVE_MACRO.match(command)
+    m = _SAVE_MACRO.match(command) if _SAVE_MACRO_STRICT.match(command) else None
     if m:
         name = m.group("name")
         return (f"Сохранить макрос «{name}»", lambda: save_macro(name, list(recent_steps))[1])
@@ -136,7 +140,7 @@ def try_memory_command(command: str, recent_steps: list):
             return "Нет заметки с таким номером."
         return (f"Удалить заметку {idx}", _dn)
     m = _SAVE_NOTE.match(command)
-    if m and not _SAVE_MACRO.match(command):
+    if m and not _SAVE_MACRO_STRICT.match(command):
         text = m.group("text").strip()
 
         def _sn():
