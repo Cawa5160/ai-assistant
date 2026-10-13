@@ -327,6 +327,17 @@ def check_microphone():
     return True, f"Микрофон: {default}"
 
 
+def level_word(rms: float, peak: int = 0) -> str:
+    """Громкость словами: обычная речь у микрофона даёт 500–4000 (шкала int16), а не «проценты»."""
+    if peak >= 32000:
+        return "слишком громко (звук искажается) — убавь громкость микрофона или отодвинься"
+    if rms < 500:
+        return "тихо (разобрать можно, но лучше говорить ближе или прибавить громкость микрофона)"
+    if rms < 4000:
+        return "нормально — так и надо"
+    return "громко (но без искажений)"
+
+
 def test_recording(seconds: float = 2.0):
     """Живая проверка: пишет пару секунд и говорит, слышно ли звук. Возвращает (ok, сообщение)."""
     sd = _load_sounddevice()
@@ -355,7 +366,7 @@ def test_recording(seconds: float = 2.0):
                        "(Параметры → Конфиденциальность → Микрофон)")
     if loudest < MIN_THRESHOLD:
         return True, "Микрофон работает, но звук очень тихий — говори ближе или прибавь громкость микрофона в Windows"
-    return True, f"Слышу тебя ✓ (уровень {min(100, int(loudest / 30))}%)"
+    return True, f"Слышу тебя ✓ — громкость: {level_word(loudest, peak_all)}"
 
 
 def install_components():
