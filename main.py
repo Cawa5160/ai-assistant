@@ -62,6 +62,7 @@ from quick_commands import try_quick_plan
 from quick_actions import try_quick_action
 import key_manager
 import macros
+import backup
 import templates
 import wakeword
 import telegram_bot
@@ -241,14 +242,28 @@ def _post_capture():
 action_executor.capture_hooks = (_pre_capture, _post_capture)
 
 
-def stop_agent():
-    """Аварийная остановка автопилота из любого места (горячая клавиша / меню трея)."""
+_stop_event = threading.Event()      # «стоп» для ожидания ИИ и вопросов в Telegram (когда окна автопилота ещё нет)
+
+
+def request_stop() -> str:
+    """Остановка из любого места (горячая клавиша, трей, /stop в Telegram). -> что сделано, текстом."""
+    _stop_event.set()
+    try:
+        telegram_bot.cancel_approvals()
+    except Exception:
+        pass
     window = _active_agent
-    if window is None:
-        notify("AI Ассистент", "Сейчас автопилот не работает.")
-        return
-    window.abort_event.set()
-    notify("Автопилот", "Останавливаю…")
+    if window is not None:
+        window.abort_event.set()
+        return "🛑 Останавливаю автопилот…"
+    if _command_lock.locked():
+        return "🛑 Останавливаю текущую команду…"
+    return "Сейчас ничего не выполняется."
+
+
+def stop_agent():
+    """Аварийная остановка из любого места (горячая клавиша / меню трея)."""
+    notify("Автопилот", request_stop())
 
 
 def _run_agent(user_command: str) -> str:
@@ -278,7 +293,7 @@ def _run_agent(user_command: str) -> str:
 def _run_agent_visible(user_command: str, on_wait) -> str:
     """Замкнутый цикл "экран -> действие -> проверка". Возвращает 'ok'/'error'."""
     try:
-        decision, _screenshot = agent_loop.decide(user_command, [], on_wait=on_wait)
+        decision, _screenshot = agent_loop.decide(user_command, [], on_wait=on_wait, cancel=_stop_event)
     except (ValueError, RuntimeError) as e:
         notify("Ошибка", str(e))
         history.add(user_command, "", f"ошибка: {e}")
@@ -289,6 +304,10 @@ def _run_agent_visible(user_command: str, on_wait) -> str:
         return "error"
 
     intent = decision["intent"]
+
+    if _stop_event.is_set():
+        history.add(user_command, decision["intent"], "остановлено пользователем")
+        return "ok"
 
     # ИИ сразу ответил без действий (уже сделано / невозможно / не понял)
     if not decision["steps"]:
@@ -372,7 +391,7 @@ def _run_view_only(user_command: str) -> str:
     """Режим «только смотреть»: ИИ смотрит на экран и отвечает, ничего не нажимая."""
     _hide_own_windows()
     try:
-        answer = agent_loop.look_and_answer(user_command)
+        answer = agent_loop.look_and_answer(user_command, cancel=_stop_event)
     except (ValueError, RuntimeError) as e:
         notify("Ошибка", str(e))
         history.add(user_command, "только смотреть", f"ошибка: {e}")
@@ -470,11 +489,7 @@ def _tg_status() -> str:
 
 
 def _tg_stop() -> str:
-    window = _active_agent
-    if window is None:
-        return "Автопилот сейчас не работает."
-    window.abort_event.set()
-    return "🛑 Останавливаю автопилот…"
+    return request_stop()
 
 
 def _tg_history() -> str:
@@ -571,6 +586,7 @@ def process_command(user_command: str):
 
     # В лог и историю попадает ТОЛЬКО замаскированный текст (пароли и т.п. -> <скрыто>);
     # настоящая команда идёт дальше в ИИ как есть — иначе он не смог бы её выполнить.
+    _stop_event.clear()
     safe_text = redact(user_command)
     log(f"Команда пользователя: {safe_text}")
     set_tray_status(COLOR_BUSY)
@@ -714,6 +730,7 @@ def apply_settings(values: dict):
             telegram_bot.stop()
     except Exception as e:
         log(f"Telegram: не удалось применить настройки: {e}")
+    backup.full_snapshot()           # ключи и токен — в зашифрованный резерв, чтобы не вводить заново после обновлений
     if values["autostart"]:
         autostart.enable()
     else:
@@ -923,6 +940,8 @@ def main():
         return
 
     log("Запуск AI-ассистента...")
+    backup.restore_secrets()         # ключи/токен пропали (чистка, новая папка) — вернуть из резерва
+    backup.full_snapshot()
     try:
         _app = app_window.AppWindow(Controller())
         single_instance.start_listener(lambda: ui_thread.post(_app.show))

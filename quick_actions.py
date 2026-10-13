@@ -189,6 +189,8 @@ def try_quick_action(command: str, notify):
             return None            # не арифметика — пусть разбирает ИИ
         return (f"Посчитать: {m.group('expr')[:60]}", lambda: f"{m.group('expr').strip()} = {result}")
     m = _FOLDER.match(command)
+    if m and m.group("f").lower() in ("рабочий стол", "desktop") and "папк" not in command.lower():
+        return None          # «покажи рабочий стол» = свернуть окна (Win+D), а не открыть папку в проводнике
     if m:
         kind = _FOLDERS[m.group("f").lower()] if m.group("f").lower() in _FOLDERS else _FOLDERS.get(m.group("f").lower()[:7], "downloads")
         path = known_folder(kind)

@@ -166,6 +166,14 @@ def confirm(code: str):
     return False, "Такого кода нет или он устарел (код живёт 10 минут)."
 
 
+def cancel_approvals():
+    """Отменяет все ожидающие вопросы «Разрешить/Отмена» (для /stop и горячей клавиши остановки)."""
+    with _lock:
+        for ap in _approvals.values():
+            ap["result"] = False
+            ap["event"].set()
+
+
 def reject_all():
     with _lock:
         _pending.clear()
@@ -598,7 +606,10 @@ def _loop(stop):
                 params["offset"] = offset
             r = _call("getUpdates", token=token, http_timeout=40, **params)
             if not r.get("ok"):
-                raise RuntimeError(str(r.get("description", "ошибка Telegram")))
+                desc = str(r.get("description", "ошибка Telegram"))
+                if r.get("error_code") == 409 or "Conflict" in desc:
+                    desc = "бот уже запущен в другой копии программы — закрой лишнюю (значок в трее → Выход)"
+                raise RuntimeError(desc)
             _state["error"] = ""
             fails = 0
             if not registered:

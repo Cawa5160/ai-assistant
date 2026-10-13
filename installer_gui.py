@@ -129,7 +129,21 @@ class InstallerApp:
 
     # ---------- фоновая установка ----------
 
+    def _close_running_app(self):
+        """Старая копия программы живёт в трее и держит бота Telegram: закрываем её, чтобы не было двух копий."""
+        try:
+            import json
+            import app_paths
+            with open(os.path.join(app_paths.DATA_DIR, ".instance.lock"), encoding="utf-8") as f:
+                pid = json.loads(f.read()).get("pid")
+            if isinstance(pid, int) and pid != os.getpid():
+                subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True, timeout=15,
+                               creationflags=0x08000000 if os.name == "nt" else 0)
+        except Exception:
+            pass
+
     def _run_install(self):
+        self._close_running_app()
         self._failed, self._missing = {}, []
         self._queue.put(("progress", 8))
         self._queue.put(("status", "Ставлю компоненты программы (1–3 минуты)…"))

@@ -3,6 +3,7 @@
 не тратят лимит Gemini и выполняются сразу. Всё остальное идёт обычным путём (локальная модель / ИИ).
 План проходит ту же проверку и подтверждение, что и любой другой.
 """
+import difflib
 import re
 
 APPS = {
@@ -62,7 +63,8 @@ _MEDIA = [
 ]
 
 
-_SHOW_DESKTOP = re.compile(r"^\s*(?:покажи рабочий стол|сверни все окна|сверни всё|сверни все|покажи десктоп)\s*[.!]*\s*$", re.I)
+_SHOW_DESKTOP = re.compile(r"^\s*(?:покажи рабочий стол|открой рабочий стол|покажи робочий стіл|відкрий робочий стіл|"
+                           r"сверни все окна|сверни всё|сверни все|покажи десктоп)\s*[.!]*\s*$", re.I)
 _CLOSE_WINDOW = re.compile(r"^\s*(?:закрой|закрыть)\s+(?:это\s+|текущее\s+)?окно\s*[.!]*\s*$", re.I)
 
 
@@ -138,9 +140,30 @@ def _simple_plan(command: str):
     return None
 
 
+_LOOSE = re.compile(r"^\s*(?:пожалуйста[,\s]+|будь\s+ласка[,\s]+)?(?P<verb>открой\w*|открыть|запусти\w*|запустить|включи|"
+                    r"відкрий\w*|відкрити|запусти\w*|запустити|увімкни|open|launch|start)\s+"
+                    r"(?:программу\s+|приложение\s+|програму\s+|застосунок\s+|сайт\s+)?(?P<w>[\w.\-]{3,20})", re.I)
+
+
+def _normalize(command: str) -> str:
+    """Приводит команду к виду, который понимают шаблоны: синонимы глагола, «пожалуйста» в конце, опечатки в названии."""
+    c = re.sub(r"[\s,]+(?:пожалуйста|будь\s+ласка|please)\s*[.!]*\s*$", "", command or "", flags=re.I)
+    m = _LOOSE.match(c)
+    if not m:
+        return c
+    word = m.group("w")
+    known = list(APPS) + list(SITES)
+    if word.lower() not in known:
+        close = difflib.get_close_matches(word.lower(), known, n=1, cutoff=0.8)
+        if close:
+            c = c[:m.start("w")] + close[0] + c[m.end("w"):]
+            m = _LOOSE.match(c)
+    return c[:m.start("verb")] + "открой" + c[m.end("verb"):]
+
+
 def try_quick_plan(command: str):
     """Возвращает план {"summary", "steps"} или None, если команда не простая."""
-    command = command or ""
+    command = _normalize(command or "")
     m = _PATTERN.match(command)
     if not m:
         return _simple_plan(command)
