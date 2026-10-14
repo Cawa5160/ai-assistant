@@ -846,3 +846,49 @@ class AgentWindow:
 @on_ui
 def open_agent_window(goal: str, max_steps: int) -> AgentWindow:
     return AgentWindow(goal, max_steps)
+
+
+# ---------- маленькое окно «Ассистент думает…» (пока ждём ответ ИИ до начала автопилота) ----------
+
+class ThinkingWindow:
+    """Без него при медленном/перегруженном Gemini выглядело как «программа зависла»: главное окно спрятано,
+    окна автопилота ещё нет. Не попадает в скриншоты; кнопка «Остановить» отменяет ожидание."""
+
+    def __init__(self, text: str, on_stop):
+        self._on_stop = on_stop
+        self.win = _new_window("Ассистент", 400, 150)
+        try:
+            sw = self.win.winfo_screenwidth()
+            self.win.geometry(f"400x150+{max(0, sw - 430)}+60")
+        except Exception:
+            pass
+        exclude_from_capture(self.win)
+        self.win.protocol("WM_DELETE_WINDOW", self._stop)
+        _header(self.win, "🤖 Ассистент думает…", "", wrap=360)
+        self.label = tk.Label(self.win, text=text, font=theme.FONT_BODY, bg=theme.BG, fg=theme.TEXT,
+                              wraplength=360, justify="left", anchor="w")
+        self.label.pack(fill="x", padx=18, pady=(10, 4))
+        tk.Button(self.win, text="🛑 Остановить", bg=theme.DANGER, fg="white", relief="flat",
+                  font=("Segoe UI", 10, "bold"), width=18, command=self._stop).pack(pady=6)
+
+    def _stop(self):
+        try:
+            self._on_stop()
+        except Exception:
+            pass
+        self.close()
+
+    @on_ui
+    def set_text(self, text: str):
+        if _exists(self.win):
+            self.label.config(text=text)
+
+    @on_ui
+    def close(self):
+        if _exists(self.win):
+            self.win.destroy()
+
+
+@on_ui
+def open_thinking_window(text: str, on_stop) -> ThinkingWindow:
+    return ThinkingWindow(text, on_stop)

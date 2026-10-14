@@ -292,8 +292,23 @@ def _run_agent(user_command: str) -> str:
 
 def _run_agent_visible(user_command: str, on_wait) -> str:
     """Замкнутый цикл "экран -> действие -> проверка". Возвращает 'ok'/'error'."""
+    thinking = None
     try:
-        decision, _screenshot = agent_loop.decide(user_command, [], on_wait=on_wait, cancel=_stop_event)
+        thinking = gui.open_thinking_window("Смотрю на экран и придумываю первый шаг…", _stop_event.set)
+    except Exception as e:
+        log(f"Окно ожидания не открылось: {e}")
+
+    def on_wait_visible(seconds, why):
+        if thinking is not None:
+            thinking.set_text(f"{why}. Подожду ~{int(seconds)} с и продолжу.")
+        on_wait(seconds, why)
+
+    try:
+        try:
+            decision, _screenshot = agent_loop.decide(user_command, [], on_wait=on_wait_visible, cancel=_stop_event)
+        finally:
+            if thinking is not None:
+                thinking.close()
     except (ValueError, RuntimeError) as e:
         notify("Ошибка", str(e))
         history.add(user_command, "", f"ошибка: {e}")

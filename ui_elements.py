@@ -48,12 +48,40 @@ def _collect(out: list, screen_w: int, screen_h: int):
                 out.append(f"- {_NAMES.get(kind, kind)} «{name}»: x={x}, y={y}")
 
 
+# Браузеры, Electron-приложения и игры: обход их дерева UI Automation очень медленный, включает у браузера режим
+# доступности (он начинает тормозить) и может подвесить компьютер — для них список не собираем, ИИ смотрит на картинку.
+SKIP_PROCESSES = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe", "vivaldi.exe", "yandex.exe",
+                  "discord.exe", "slack.exe", "teams.exe", "ms-teams.exe", "code.exe", "telegram.exe", "spotify.exe",
+                  "steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "whatsapp.exe", "viber.exe"}
+_busy = threading.Event()        # предыдущий обход ещё идёт в фоне — новый не запускаем
+
+
+def _foreground_process() -> str:
+    try:
+        import ctypes
+        import psutil
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        pid = ctypes.c_ulong()
+        ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        return psutil.Process(pid.value).name().lower()
+    except Exception:
+        return ""
+
+
 def describe_foreground() -> str:
     """Текст со списком элементов активного окна или '' (нет данных / не Windows / ошибка)."""
     out: list = []
+    if _busy.is_set() or _foreground_process() in SKIP_PROCESSES:
+        return ""
     try:
         w, h = screen_utils.get_screen_size()
-        t = threading.Thread(target=lambda: _safe(out, w, h), daemon=True)
+        def run():
+            _busy.set()
+            try:
+                _safe(out, w, h)
+            finally:
+                _busy.clear()
+        t = threading.Thread(target=run, daemon=True)
         t.start()
         t.join(TIME_LIMIT_S)
     except Exception:
