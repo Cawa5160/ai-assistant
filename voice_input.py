@@ -109,8 +109,8 @@ def _resolve_device(sd):
         for i, d in enumerate(sd.query_devices()):
             if d["max_input_channels"] > 0 and d["name"] == wanted:
                 return i
-    except Exception:
-        pass
+    except Exception as _e:
+        log(f"voice_input.py:112: {type(_e).__name__}: {_e}")
     return None
 
 
@@ -121,8 +121,8 @@ def _open_stream(sd, device):
         native = int(info["default_samplerate"])
         if native not in rates:
             rates.append(native)
-    except Exception:
-        pass
+    except Exception as _e:
+        log(f"voice_input.py:124: {type(_e).__name__}: {_e}")
     last_error = None
     for rate in rates:
         try:
@@ -210,8 +210,8 @@ def _record(timeout, on_state, on_level, cancel):
         try:
             stream.stop()
             stream.close()
-        except Exception:
-            pass
+        except Exception as _e:
+            log(f"voice_input.py:213: {type(_e).__name__}: {_e}")
 
     if not started:
         if peak_all < DEAD_PEAK:
@@ -322,8 +322,8 @@ def check_microphone():
         idx = _default_input_index(sd)
         if idx is not None:
             default = sd.query_devices(idx)["name"]
-    except Exception:
-        pass
+    except Exception as _e:
+        log(f"voice_input.py:325: {type(_e).__name__}: {_e}")
     return True, f"Микрофон: {default}"
 
 
@@ -359,8 +359,8 @@ def test_recording(seconds: float = 2.0):
         try:
             stream.stop()
             stream.close()
-        except Exception:
-            pass
+        except Exception as _e:
+            log(f"voice_input.py:362: {type(_e).__name__}: {_e}")
     if peak_all < DEAD_PEAK:
         return False, ("Звука нет совсем — микрофон выключен или Windows не даёт доступ "
                        "(Параметры → Конфиденциальность → Микрофон)")

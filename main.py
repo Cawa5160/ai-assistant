@@ -33,8 +33,8 @@ try:
         ctypes.windll.shcore.SetProcessDpiAwareness(2)   # per-monitor
     except Exception:
         ctypes.windll.user32.SetProcessDPIAware()
-except Exception:
-    pass
+except Exception as _e:
+    log(f"main.py:36: {type(_e).__name__}: {_e}")
 
 import keyboard
 import pystray
@@ -136,8 +136,8 @@ def run_steps_with_progress(steps: list, progress):
                 if not screen_utils.screens_differ(before_img, screen_utils.take_screenshot_image()):
                     status = "warning"
                     log(f"Шаг {i + 1}: экран визуально не изменился — возможно, промах.")
-            except Exception:
-                pass
+            except Exception as _e:
+                log(f"main.py:139: {type(_e).__name__}: {_e}")
         progress.mark_step(i, status)
         completed += 1
 
@@ -250,8 +250,8 @@ def request_stop() -> str:
     _stop_event.set()
     try:
         telegram_bot.cancel_approvals()
-    except Exception:
-        pass
+    except Exception as _e:
+        log(f"main.py:253: {type(_e).__name__}: {_e}")
     window = _active_agent
     if window is not None:
         window.abort_event.set()
@@ -578,8 +578,8 @@ def on_telegram_command(text: str, user_id, user_name) -> str:
         last = history.get_all()[0]
         if last.get("time", "") >= started:
             result = last.get("status") or last.get("summary") or "Готово"
-    except Exception:
-        pass
+    except Exception as _e:
+        log(f"main.py:581: {type(_e).__name__}: {_e}")
     if _remote.screen and config.get("telegram_screen_after"):
         time.sleep(1.0)
         try:
@@ -759,8 +759,8 @@ def quit_app():
     try:
         if _tray_icon is not None:
             _tray_icon.stop()
-    except Exception:
-        pass
+    except Exception as _e:
+        log(f"main.py:762: {type(_e).__name__}: {_e}")
     if _app is not None:
         ui_thread.post(_app.quit)
 
@@ -843,8 +843,8 @@ def set_tray_status(color: str):
         _tray_icon.icon = make_tray_icon_image(color)
         if color == COLOR_ERROR:
             threading.Timer(3.0, lambda: set_tray_status(COLOR_IDLE)).start()
-    except Exception:
-        pass
+    except Exception as _e:
+        log(f"main.py:846: {type(_e).__name__}: {_e}")
 
 
 def setup_tray():
@@ -901,8 +901,8 @@ def register_hotkeys():
                     keyboard.add_hotkey("ctrl+shift+a", _in_thread(handler))
                     _registered_hotkeys.append("ctrl+shift+a")
                     log("Для быстрой команды использую клавишу по умолчанию: ctrl+shift+a")
-                except Exception:
-                    pass
+                except Exception as _e:
+                    log(f"main.py:904: {type(_e).__name__}: {_e}")
 
 
 def _on_wake_word(rest: str):
@@ -910,8 +910,8 @@ def _on_wake_word(rest: str):
     try:
         import winsound
         winsound.Beep(1000, 120)
-    except Exception:
-        pass
+    except Exception as _e:
+        log(f"main.py:913: {type(_e).__name__}: {_e}")
     if _command_lock.locked():
         return
     if rest.strip():
@@ -975,13 +975,13 @@ def main():
         try:
             if _app is not None:
                 _app.root.destroy()
-        except Exception:
-            pass
+        except Exception as _e:
+            log(f"main.py:978: {type(_e).__name__}: {_e}")
         try:
             if _tray_icon is not None:
                 _tray_icon.stop()
-        except Exception:
-            pass
+        except Exception as _e:
+            log(f"main.py:983: {type(_e).__name__}: {_e}")
 
 
 if __name__ == "__main__":

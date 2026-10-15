@@ -22,7 +22,7 @@ _NAMES = {"ButtonControl": "кнопка", "EditControl": "поле ввода",
           "SplitButtonControl": "кнопка", "DataItemControl": "строка"}
 
 
-def _collect(out: list, screen_w: int, screen_h: int):
+def _collect(out: list, screen_w: int, screen_h: int, max_depth: int = 9):
     import uiautomation as auto
     with auto.UIAutomationInitializerInThread():
         root = auto.GetForegroundControl()
@@ -30,7 +30,7 @@ def _collect(out: list, screen_w: int, screen_h: int):
             return
         title = (root.Name or "")[:60]
         out.append(f"Активное окно: «{title}»")
-        for ctrl, _depth in auto.WalkControl(root, includeTop=False, maxDepth=9):
+        for ctrl, _depth in auto.WalkControl(root, includeTop=False, maxDepth=max_depth):
             if len(out) > MAX_ELEMENTS:
                 break
             kind = ctrl.ControlTypeName
@@ -50,8 +50,10 @@ def _collect(out: list, screen_w: int, screen_h: int):
 
 # Браузеры, Electron-приложения и игры: обход их дерева UI Automation очень медленный, включает у браузера режим
 # доступности (он начинает тормозить) и может подвесить компьютер — для них список не собираем, ИИ смотрит на картинку.
-SKIP_PROCESSES = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe", "vivaldi.exe", "yandex.exe",
-                  "discord.exe", "slack.exe", "teams.exe", "ms-teams.exe", "code.exe", "telegram.exe", "spotify.exe",
+BROWSERS = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe", "vivaldi.exe", "yandex.exe"}
+BROWSER_TIME_S = 1.2     # у браузеров обход короткий и неглубокий: вкладки и адресная строка нужны, всё дерево страницы — нет
+BROWSER_DEPTH = 6
+SKIP_PROCESSES = {"discord.exe", "slack.exe", "teams.exe", "ms-teams.exe", "code.exe", "telegram.exe", "spotify.exe",
                   "steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "whatsapp.exe", "viber.exe"}
 _busy = threading.Event()        # предыдущий обход ещё идёт в фоне — новый не запускаем
 
@@ -71,26 +73,30 @@ def _foreground_process() -> str:
 def describe_foreground() -> str:
     """Текст со списком элементов активного окна или '' (нет данных / не Windows / ошибка)."""
     out: list = []
-    if _busy.is_set() or _foreground_process() in SKIP_PROCESSES:
+    proc = _foreground_process()
+    if _busy.is_set() or proc in SKIP_PROCESSES:
         return ""
+    browser = proc in BROWSERS
     try:
         w, h = screen_utils.get_screen_size()
         def run():
             _busy.set()
             try:
-                _safe(out, w, h)
+                _safe(out, w, h, BROWSER_DEPTH if browser else 9)
             finally:
                 _busy.clear()
         t = threading.Thread(target=run, daemon=True)
         t.start()
-        t.join(TIME_LIMIT_S)
+        t.join(BROWSER_TIME_S if browser else TIME_LIMIT_S)
+        if t.is_alive():
+            log(f"UI Automation: обход {proc or 'окна'} не уложился в лимит времени, беру то, что успел")
     except Exception:
         return ""
     return "\n".join(out) if len(out) > 1 else ""
 
 
-def _safe(out, w, h):
+def _safe(out, w, h, max_depth=9):
     try:
-        _collect(out, w, h)
+        _collect(out, w, h, max_depth)
     except Exception as e:      # нет модуля, не Windows, COM-ошибка…
         log(f"UI Automation недоступен: {type(e).__name__}")

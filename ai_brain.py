@@ -31,6 +31,11 @@ def _model() -> str:
     return _active_model or config.get("model")
 
 
+def _key_header(api_key: str) -> dict:
+    """Ключ в заголовке, а не в адресе: адрес попадает в тексты ошибок и логи."""
+    return {"x-goog-api-key": api_key}
+
+
 def _gemini_url() -> str:
     return f"{API_ROOT}/models/{_model()}:generateContent"
 
@@ -70,7 +75,7 @@ def _call_gemini(api_key: str, payload: dict):
     'ok' | 'rate_limited' | 'no_quota' | 'invalid' | 'bad_model' | 'server_error' | 'network_error'
     """
     try:
-        response = requests.post(_gemini_url(), params={"key": api_key}, json=payload, timeout=60)
+        response = requests.post(_gemini_url(), headers=_key_header(api_key), json=payload, timeout=60)
     except requests.exceptions.RequestException as e:
         log(f"Сетевая ошибка при обращении к Gemini: {e}")
         return None, "network_error", ""
@@ -287,7 +292,7 @@ def test_api_key(api_key: str):
     for _attempt in range(2):                      # один повтор: Google иногда отвечает медленнее 20 секунд
         try:
             resp = requests.post(
-                _gemini_url(), params={"key": api_key},
+                _gemini_url(), headers=_key_header(api_key),
                 json={"contents": [{"role": "user", "parts": [{"text": "ping"}]}],
                       "generationConfig": {"maxOutputTokens": 5}},
                 timeout=40,
@@ -324,7 +329,7 @@ def test_api_key(api_key: str):
 def list_models(api_key: str):
     """Модели, доступные этому ключу для generateContent: (ok, список имён | текст ошибки)."""
     try:
-        resp = requests.get(f"{API_ROOT}/models", params={"key": api_key, "pageSize": 200}, timeout=20)
+        resp = requests.get(f"{API_ROOT}/models", headers=_key_header(api_key), params={"pageSize": 200}, timeout=20)
     except Exception as e:
         return False, f"Нет связи с Google: {e}"
     if resp.status_code != 200:

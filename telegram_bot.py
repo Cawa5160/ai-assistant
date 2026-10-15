@@ -74,8 +74,8 @@ def get_token() -> str:
             t = kr.get_password(SERVICE, "telegram_token")
             if t:
                 return t
-        except Exception:
-            pass
+        except Exception as _e:
+            log(f"telegram_bot.py:77: {type(_e).__name__}: {_e}")
     return str(_load().get("token_fallback") or "")
 
 
@@ -91,8 +91,8 @@ def set_token(token: str):
             else:
                 try:
                     kr.delete_password(SERVICE, "telegram_token")
-                except Exception:
-                    pass
+                except Exception as _e:
+                    log(f"telegram_bot.py:94: {type(_e).__name__}: {_e}")
             stored = True
         except Exception as e:
             log(f"Telegram: токен не сохранился в защищённом хранилище: {e}")
@@ -237,8 +237,8 @@ def _send(chat_id, text: str, keyboard: bool = False):
 def _typing(chat_id, action="typing"):
     try:
         _call("sendChatAction", http_timeout=8, chat_id=chat_id, action=action)
-    except Exception:
-        pass
+    except Exception as _e:
+        log(f"telegram_bot.py:240: {type(_e).__name__}: {_e}")
 
 
 def _send_photo(chat_id, image) -> bool:
@@ -304,8 +304,8 @@ def ask_approval(uid, text: str, timeout: int = 180, danger: bool = False):
         try:
             _call("editMessageReplyMarkup", http_timeout=10, chat_id=uid, message_id=mid,
                   reply_markup={"inline_keyboard": []})
-        except Exception:
-            pass
+        except Exception as _e:
+            log(f"telegram_bot.py:307: {type(_e).__name__}: {_e}")
     if result is None:
         _send(uid, "⌛ Время на подтверждение вышло — действие отменено.")
         return False
@@ -342,8 +342,8 @@ class Progress:
                 self.mid = (r.get("result") or {}).get("message_id")
             else:
                 _call("editMessageText", http_timeout=15, chat_id=self.chat, message_id=self.mid, text=text[:3500])
-        except Exception:
-            pass
+        except Exception as _e:
+            log(f"telegram_bot.py:345: {type(_e).__name__}: {_e}")
 
 
 def send_screen(chat_id, as_file: bool = False, caption: str = ""):
@@ -381,8 +381,8 @@ def _handle_callback(cb: dict):
             ap["event"].set()
     try:
         _call("answerCallbackQuery", http_timeout=10, callback_query_id=cb.get("id"), text=answer)
-    except Exception:
-        pass
+    except Exception as _e:
+        log(f"telegram_bot.py:384: {type(_e).__name__}: {_e}")
 
 
 def check_token(token: str):
@@ -586,8 +586,8 @@ def _announce_online():
     for u in users():
         try:
             _send(u["id"] if isinstance(u, dict) and "id" in u else u, "🟢 Ассистент на связи (компьютер включён). /menu — кнопки.", keyboard=True)
-        except Exception:
-            pass
+        except Exception as _e:
+            log(f"telegram_bot.py:589: {type(_e).__name__}: {_e}")
 
 
 def _loop(stop):
