@@ -70,16 +70,33 @@ def _new_window(title: str, width: int, height: int, topmost: bool = True):
 
 
 def _header(win, title: str, subtitle: str = "", color: str = None, wrap: int = 520):
-    """Цветная шапка окна: крупный заголовок и (необязательно) пояснение белым текстом."""
-    color = color or "#4338CA"
-    band = tk.Frame(win, bg=color)
-    band.pack(fill="x")
-    tk.Label(band, text=title, font=("Segoe UI", 15, "bold"), bg=color, fg="white", anchor="w").pack(
-        fill="x", padx=18, pady=(14, 0 if subtitle else 14))
+    """Шапка окна в новом стиле: цветная плитка-значок слева, заголовок и пояснение справа."""
+    color = color or theme.FILL
+    band = tk.Frame(win, bg=theme.BG)
+    band.pack(fill="x", padx=20, pady=(18, 6))
+    glyph = {"#B91C1C": "!", "#15803D": "✓"}.get(color, "i")
+    tile = tk.Label(band, text=glyph, font=("Segoe UI", 16, "bold"), bg=color, fg="white", width=3, height=1)
+    tile.pack(side="left", anchor="n", padx=(0, 14), ipady=6)
+    box = tk.Frame(band, bg=theme.BG)
+    box.pack(side="left", fill="x", expand=True)
+    tk.Label(box, text=title, font=("Segoe UI", 15, "bold"), bg=theme.BG, fg=theme.TEXT, anchor="w").pack(fill="x")
     if subtitle:
-        tk.Label(band, text=subtitle, font=theme.FONT_BODY, bg=color, fg="#E8E9FF", anchor="w", justify="left",
-                 wraplength=wrap).pack(fill="x", padx=18, pady=(2, 14))
+        tk.Label(box, text=subtitle, font=theme.FONT_BODY, bg=theme.BG, fg=theme.TEXT_MUTED, anchor="w",
+                 justify="left", wraplength=wrap - 60).pack(fill="x", pady=(2, 0))
     return band
+
+
+def _dialog_button(parent, text, command, kind="primary", width=18):
+    """Кнопка окна подтверждения: primary — заливка, danger — красная рамка (опасное действие), neutral — серая."""
+    font = ("Segoe UI", 10, "bold")
+    if kind == "danger":
+        return tk.Button(parent, text=text, command=command, font=font, relief="flat", width=width,
+                         bg=theme.BG, fg=theme.DANGER, activebackground=theme.BG, activeforeground=theme.DANGER,
+                         highlightthickness=1, highlightbackground=theme.DANGER, bd=0, pady=6, cursor="hand2")
+    bg = {"primary": theme.FILL, "success": "#15803D", "neutral": theme.TOGGLE_OFF}.get(kind, theme.FILL)
+    return tk.Button(parent, text=text, command=command, font=font, relief="flat", width=width, bg=bg, fg="white",
+                     activebackground=bg, activeforeground="white", bd=0, highlightthickness=0, pady=6,
+                     cursor="hand2")
 
 
 def _present(win):
@@ -142,12 +159,7 @@ def confirm_plan(summary: str, steps: list, screenshot_b64=None, auto_seconds: i
 
     band_color = {"low": "#15803D", "normal": "#4338CA", "high": "#B91C1C"}.get(risk, "#4338CA")
     band_title = {"low": "Безопасные действия", "normal": "Подтверди действия", "high": "Внимание: высокий риск"}.get(risk, "Подтверди действия")
-    band = tk.Frame(win, bg=band_color)
-    band.pack(fill="x")
-    tk.Label(band, text=band_title, font=("Segoe UI", 15, "bold"), bg=band_color, fg="white",
-             anchor="w").pack(fill="x", padx=18, pady=(14, 0))
-    tk.Label(band, text=summary, font=theme.FONT_BODY, bg=band_color, fg="#F1F5F9", anchor="w", justify="left",
-             wraplength=580).pack(fill="x", padx=18, pady=(2, 14))
+    _header(win, band_title, summary, band_color, wrap=600)
 
     click_steps = [s for s in steps if s.get("action") in plan_validator.POINTER_ACTIONS
                    and "x" in s.get("args", {})]
@@ -226,10 +238,8 @@ def confirm_plan(summary: str, steps: list, screenshot_b64=None, auto_seconds: i
                             "(файлы, системные изменения, опасные формулировки).",
                  font=("Segoe UI", 9, "bold"), fg=theme.DANGER, bg=theme.BG,
                  wraplength=560, justify="left").pack(pady=(0, 5), padx=10)
-        tk.Button(btn_frame, text="⚠️ Я понимаю риск и разрешаю", bg=theme.DANGER, fg="white", font=bold,
-                  relief="flat", width=28, command=on_yes).pack(side="left", padx=10)
-        tk.Button(btn_frame, text="❌ Отмена", bg=theme.NEUTRAL, fg="white", font=bold,
-                  relief="flat", width=15, command=on_no).pack(side="left", padx=10)
+        _dialog_button(btn_frame, "Отмена", on_no, "primary", 15).pack(side="left", padx=10)
+        _dialog_button(btn_frame, "Я понимаю риск, разрешить", on_yes, "danger", 26).pack(side="left", padx=10)
     elif not manual and (risk == "low" or (risk == "normal" and auto_seconds > 0)):
         countdown = {"n": auto_seconds if auto_seconds > 0 else 3}
         auto_label = "🟢 Безопасные действия" if risk == "low" else "⏱ Простая команда"
@@ -244,16 +254,12 @@ def confirm_plan(summary: str, steps: list, screenshot_b64=None, auto_seconds: i
             countdown["n"] -= 1
             win.after(1000, tick)
 
-        tk.Button(btn_frame, text="✅ Выполнить сейчас", bg=theme.SUCCESS, fg="white", font=bold,
-                  relief="flat", width=18, command=on_yes).pack(side="left", padx=10)
-        tk.Button(btn_frame, text="❌ Отмена", bg=theme.DANGER, fg="white", font=bold,
-                  relief="flat", width=15, command=on_no).pack(side="left", padx=10)
+        _dialog_button(btn_frame, "Выполнить сейчас", on_yes, "success", 18).pack(side="left", padx=10)
+        _dialog_button(btn_frame, "Отмена", on_no, "neutral", 15).pack(side="left", padx=10)
         tick()
     else:
-        tk.Button(btn_frame, text="✅ Разрешить", bg=theme.SUCCESS, fg="white", font=bold,
-                  relief="flat", width=15, command=on_yes).pack(side="left", padx=10)
-        tk.Button(btn_frame, text="❌ Отмена", bg=theme.DANGER, fg="white", font=bold,
-                  relief="flat", width=15, command=on_no).pack(side="left", padx=10)
+        _dialog_button(btn_frame, "Разрешить", on_yes, "primary", 15).pack(side="left", padx=10)
+        _dialog_button(btn_frame, "Отмена", on_no, "neutral", 15).pack(side="left", padx=10)
 
     _present(win)
     win.wait_window()
@@ -313,7 +319,7 @@ def first_run_wizard() -> list:
 
     btn_frame = tk.Frame(win, bg=theme.BG)
     btn_frame.pack(pady=5)
-    tk.Button(btn_frame, text="Сохранить и продолжить", bg=theme.SUCCESS, fg="white", relief="flat",
+    tk.Button(btn_frame, text="Сохранить и продолжить", bg="#15803D", fg="white", relief="flat",
               command=submit).pack(side="left", padx=5)
     tk.Button(btn_frame, text="Пропустить", relief="flat", command=win.destroy).pack(side="left", padx=5)
     tk.Label(win, text="Ключи можно добавить/изменить позже: Настройки в главном окне",
@@ -363,10 +369,8 @@ def confirm_agent_start(goal: str, intent: str, steps_text: list, max_steps: int
     btns = tk.Frame(win, bg=theme.BG)
     btns.pack(pady=12)
     bold = ("Segoe UI", 10, "bold")
-    tk.Button(btns, text="▶ Запустить автопилот", bg=theme.SUCCESS, fg="white", font=bold, relief="flat",
-              width=22, command=on_yes).pack(side="left", padx=10)
-    tk.Button(btns, text="❌ Отмена", bg=theme.DANGER, fg="white", font=bold, relief="flat",
-              width=14, command=win.destroy).pack(side="left", padx=10)
+    _dialog_button(btns, "▶ Запустить автопилот", on_yes, "primary", 22).pack(side="left", padx=10)
+    _dialog_button(btns, "Отмена", win.destroy, "neutral", 14).pack(side="left", padx=10)
 
     if auto_seconds > 0:
         countdown = {"n": auto_seconds}
@@ -427,7 +431,7 @@ class ExecutionProgressWindow:
         self.status_label = tk.Label(self.win, text="Выполняется...", font=theme.FONT_BODY, bg=theme.BG,
                                      wraplength=520)
         self.status_label.pack(pady=(10, 5))
-        self.stop_btn = tk.Button(self.win, text="🛑 Остановить", bg=theme.DANGER, fg="white", relief="flat",
+        self.stop_btn = tk.Button(self.win, text="🛑 Остановить", bg="#B91C1C", fg="white", relief="flat",
                                   font=("Segoe UI", 10, "bold"), command=self._on_stop)
         self.stop_btn.pack(pady=10)
 
@@ -520,9 +524,9 @@ def ask_yes_no(title: str, text: str, yes: str = "Да", no: str = "Нет") -> 
     row = tk.Frame(win, bg=theme.BG)
     row.pack(pady=16)
     bold = ("Segoe UI", 10, "bold")
-    tk.Button(row, text=yes, bg=theme.SUCCESS, fg="white", font=bold, relief="flat", width=18,
+    tk.Button(row, text=yes, bg=theme.FILL, fg="white", font=bold, relief="flat", width=18,
               command=on_yes).pack(side="left", padx=8)
-    tk.Button(row, text=no, bg=theme.NEUTRAL, fg="white", font=bold, relief="flat", width=14,
+    tk.Button(row, text=no, bg=theme.TOGGLE_OFF, fg="white", font=bold, relief="flat", width=14,
               command=win.destroy).pack(side="left", padx=8)
     _present(win)
     win.wait_window()
@@ -625,7 +629,7 @@ class AgentBar:
         self.label = tk.Label(self.win, text="🤖 Автопилот запускается…", bg=theme.PRIMARY, fg="white",
                               font=bold, anchor="w", padx=12)
         self.label.pack(side="left", fill="both", expand=True)
-        tk.Button(self.win, text="🛑 Стоп", bg=theme.DANGER, fg="white", relief="flat", font=bold,
+        tk.Button(self.win, text="🛑 Стоп", bg="#B91C1C", fg="white", relief="flat", font=bold,
                   command=owner._on_stop).pack(side="right", fill="y")
         self.pause_btn = tk.Button(self.win, text="⏸ Пауза", bg=theme.PRIMARY_DARK, fg="white", relief="flat",
                                    font=bold, command=owner.toggle_pause)
@@ -697,18 +701,16 @@ class AgentWindow:
         confirm_btns = tk.Frame(self.confirm_frame, bg=theme.BG)
         confirm_btns.pack()
         bold = ("Segoe UI", 10, "bold")
-        tk.Button(confirm_btns, text="⚠️ Да, разрешаю", bg=theme.DANGER, fg="white", font=bold, relief="flat",
-                  command=lambda: self._answer(True)).pack(side="left", padx=8)
-        tk.Button(confirm_btns, text="Нет, стоп", bg=theme.NEUTRAL, fg="white", font=bold, relief="flat",
-                  command=lambda: self._answer(False)).pack(side="left", padx=8)
+        _dialog_button(confirm_btns, "Нет, стоп", lambda: self._answer(False), "primary", 14).pack(side="left", padx=8)
+        _dialog_button(confirm_btns, "Да, разрешаю", lambda: self._answer(True), "danger", 16).pack(side="left", padx=8)
 
         self.status_label = tk.Label(self.win, text=f"Работаю… (не больше {max_steps} шагов)",
                                      font=theme.FONT_BODY, bg=theme.BG)
         self.status_label.pack(pady=(4, 2))
-        self.stop_btn = tk.Button(self.win, text="🛑 Остановить", bg=theme.DANGER, fg="white", relief="flat",
+        self.stop_btn = tk.Button(self.win, text="🛑 Остановить", bg="#B91C1C", fg="white", relief="flat",
                                   font=bold, command=self._on_stop)
         self.stop_btn.pack(pady=(4, 6))
-        tk.Button(self.win, text="📋 Копировать журнал", bg=theme.NEUTRAL, fg="white", relief="flat",
+        tk.Button(self.win, text="📋 Копировать журнал", bg=theme.TOGGLE_OFF, fg="white", relief="flat",
                   font=("Segoe UI", 9), command=self._copy_log).pack(pady=(0, 12))
 
         exclude_from_capture(self.win)
@@ -868,7 +870,7 @@ class ThinkingWindow:
         self.label = tk.Label(self.win, text=text, font=theme.FONT_BODY, bg=theme.BG, fg=theme.TEXT,
                               wraplength=360, justify="left", anchor="w")
         self.label.pack(fill="x", padx=18, pady=(10, 4))
-        tk.Button(self.win, text="🛑 Остановить", bg=theme.DANGER, fg="white", relief="flat",
+        tk.Button(self.win, text="🛑 Остановить", bg="#B91C1C", fg="white", relief="flat",
                   font=("Segoe UI", 10, "bold"), width=18, command=self._stop).pack(pady=6)
 
     def _stop(self):

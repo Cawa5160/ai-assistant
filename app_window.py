@@ -1513,6 +1513,8 @@ class AppWindow:
         _button(head, "↻ Проверить снова", self.refresh, "neutral", small=True).pack(side="left", padx=8)
         _button(head, "📋 Копировать", self._copy_diag, "neutral", small=True).pack(side="left")
         _button(head, "🖱 Тест мыши", self._mouse_test, "primary", small=True).pack(side="left", padx=8)
+        self._diag_checks = tk.Frame(page, bg=theme.BG)
+        self._diag_checks.pack(fill="x", padx=32, pady=(12, 0))
         self._diag_box = scrolledtext.ScrolledText(page, font=theme.FONT_MONO, wrap="word", bd=0, relief="flat",
                                                    bg=theme.CARD_BG, fg=theme.TEXT, highlightthickness=1,
                                                    highlightbackground=theme.BORDER, padx=10, pady=8)
@@ -1530,9 +1532,30 @@ class AppWindow:
             results = diagnostics.run_checks()
         except Exception as e:
             results = [("Проверка системы", False, str(e))]
+        self._diag_results = results
         text = "\n".join(f"{'✅' if ok else '❌'} {label}: {detail}" for label, ok, detail in results)
         text += "\n\n──────── Журнал приложения (последние записи) ────────\n" + _log_tail(45)
-        ui_thread.post(self._set_text, self._diag_box, text)
+        ui_thread.post(self._show_diag, results, text)
+
+    def _show_diag(self, results, text):
+        """Проверки — строками в карточке (✓ / ✕ и пояснение), ниже — журнал приложения."""
+        frame = self._diag_checks
+        for w in frame.winfo_children():
+            w.destroy()
+        rc = ui_kit.RoundCard(frame, outer_bg=theme.BG, pad=6)
+        rc.pack(fill="x")
+        for n, (label, ok, detail) in enumerate(results):
+            if n:
+                tk.Frame(rc.body, bg=theme.BORDER, height=1).pack(fill="x", padx=10)
+            row = tk.Frame(rc.body, bg=theme.CARD_BG)
+            row.pack(fill="x", padx=10, pady=7)
+            tk.Label(row, text="✓" if ok else "✕", font=_font(11, True), bg=theme.CARD_BG, width=2,
+                     fg=theme.SUCCESS if ok else theme.DANGER).pack(side="left", anchor="n")
+            tk.Label(row, text=label, font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT, width=24,
+                     anchor="nw", justify="left", wraplength=190).pack(side="left", anchor="n")
+            tk.Label(row, text=str(detail), font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w",
+                     justify="left", wraplength=420).pack(side="left", fill="x", expand=True)
+        self._set_text(self._diag_box, "Журнал приложения (последние записи)\n\n" + _log_tail(45))
 
     def _mouse_test(self):
         """Двигает курсор по экрану и кликает по своей кнопке — показывает, где именно ломается управление мышью."""
@@ -1601,6 +1624,7 @@ class AppWindow:
     def _copy_diag(self):
         try:
             self.root.clipboard_clear()
-            self.root.clipboard_append(self._diag_box.get("1.0", "end"))
+            checks = "\n".join(f"{'OK' if ok else 'ОШИБКА'} {l}: {d}" for l, ok, d in getattr(self, "_diag_results", []))
+            self.root.clipboard_append((checks + "\n\n" if checks else "") + self._diag_box.get("1.0", "end"))
         except tk.TclError:
             pass
