@@ -167,6 +167,18 @@ def _status_color(status: str) -> str:
     return theme.TEXT_MUTED
 
 
+def _status_mark(status: str) -> str:
+    """Значок перед статусом: смысл не только цветом."""
+    s = (status or "").lower()
+    if s.startswith("готово") or "выполнено" in s:
+        return "✓ "
+    if "ошибка" in s or "не понял" in s:
+        return "! "
+    if "остановлено" in s or "отклон" in s or "отмен" in s:
+        return "✕ "
+    return ""
+
+
 def _log_tail(lines: int = 45) -> str:
     """Последние строки журнала — по ним видно, что на самом деле случилось (лимит, сеть, ошибка)."""
     try:
@@ -400,78 +412,97 @@ class AppWindow:
     def _build_home(self, parent):
         page = ScrollFrame(parent, theme.BG)
         body = tk.Frame(page.inner, bg=theme.BG)
-        body.pack(fill="both", expand=True, padx=32, pady=26)
+        body.pack(fill="both", expand=True, padx=32, pady=28)
 
-        _hero(body, "Привет! Я AI Ассистент 👋",
-              "Напиши, что нужно сделать, нажми на микрофон или приложи картинку/аудио. Я посмотрю на экран и выполню это по шагам, "
-              "а на опасные действия всегда спрошу разрешения.").pack(fill="x", pady=(0, 18))
+        tk.Label(body, text="Что нужно сделать?", font=_font(22, True), bg=theme.BG, fg=theme.TEXT,
+                 anchor="w").pack(fill="x")
+        tk.Label(body, text="Напиши или скажи команду — я посмотрю на экран и выполню её по шагам. "
+                            "На опасные действия всегда спрошу разрешение.",
+                 font=_font(10), bg=theme.BG, fg=theme.TEXT_MUTED, anchor="w", justify="left",
+                 wraplength=700).pack(fill="x", pady=(4, 16))
 
-        self._busy_banner = tk.Label(body, text="", font=_font(10, True), bg=theme.NAV_ACTIVE, fg=theme.PRIMARY,
+        self._busy_banner = tk.Label(body, text="", font=_font(10, True), bg=theme.NAV_ACTIVE, fg=theme.TEXT,
                                      anchor="w", padx=12, pady=8, justify="left", wraplength=680)
 
-        self._input_card = _card(body)
+        # --- карточка ввода ---
+        self._input_card = ui_kit.RoundCard(body, outer_bg=theme.BG, pad=14, radius=14)
         self._input_card.pack(fill="x")
-        inner = tk.Frame(self._input_card, bg=theme.CARD_BG)
-        inner.pack(fill="x", padx=10, pady=10)
-        buttons = tk.Frame(inner, bg=theme.CARD_BG)
-        buttons.pack(side="right", padx=(8, 0))        # сначала кнопки — иначе широкое поле вытесняет их за край
-        self._input = tk.Text(inner, height=3, width=10, wrap="word", font=_font(11), bd=0, relief="flat",
+        inner = self._input_card.body
+        self._input = tk.Text(inner, height=3, wrap="word", font=_font(12), bd=0, relief="flat",
                               bg=theme.CARD_BG, fg=theme.TEXT, insertbackground=theme.TEXT,
-                              padx=6, pady=4, highlightthickness=0)
-        self._input.pack(side="left", fill="both", expand=True)
-        _button(buttons, "🎙 Голосом", self._on_mic, "neutral", small=True).pack(side="top", pady=(0, 6), fill="x")
-        _button(buttons, "📎 Файл", self._on_attach, "neutral", small=True).pack(side="top", pady=(0, 6), fill="x")
-        _button(buttons, "➤ Выполнить", self._on_send, "primary", small=True).pack(side="top", fill="x")
+                              padx=4, pady=4, highlightthickness=0)
+        self._input.pack(fill="x")
         self._input.bind("<Return>", self._on_enter)
+        bar = tk.Frame(inner, bg=theme.CARD_BG)
+        bar.pack(fill="x", pady=(8, 0))
+        _button(bar, "🎙 Голосом", self._on_mic, "neutral", small=True).pack(side="left", padx=(0, 8))
+        _button(bar, "📎 Файл", self._on_attach, "neutral", small=True).pack(side="left")
+        _button(bar, "Выполнить  ➤", self._on_send, "primary").pack(side="right")
 
-        self._hint = tk.Label(body, text="Enter — выполнить · Shift+Enter — новая строка · Ctrl+Shift+A — быстрая "
-                                         "команда из любого места",
-                              font=_font(9), fg=theme.TEXT_MUTED, bg=theme.BG, anchor="w")
-        self._hint.pack(fill="x", pady=(6, 4))
-
-        # Переключатель «только смотреть» прямо на главной: действует сразу, без кнопки «Сохранить»
+        # --- подсказка и «только смотреть» (действует сразу, без «Сохранить») ---
+        line = tk.Frame(body, bg=theme.BG)
+        line.pack(fill="x", pady=(8, 2))
         self._view_only_var = tk.BooleanVar(master=self.root, value=bool(config.get("view_only")))
 
         def _toggle_view_only():
             config.save({"view_only": bool(self._view_only_var.get())})
 
-        tk.Checkbutton(body, text="👁 Только смотреть — ИИ отвечает про экран, но ничего не нажимает и не печатает",
-                       variable=self._view_only_var, command=_toggle_view_only, bg=theme.BG, fg=theme.TEXT,
-                       activebackground=theme.BG, selectcolor=theme.INPUT_BG, font=_font(9),
-                       anchor="w", highlightthickness=0, bd=0).pack(fill="x", pady=(0, 10))
+        ui_kit.Toggle(line, self._view_only_var, bg=theme.BG, command=_toggle_view_only,
+                      label="Только смотреть").pack(side="right")
+        vo = tk.Label(line, text="Только смотреть", font=_font(9), bg=theme.BG, fg=theme.TEXT_MUTED, cursor="hand2")
+        vo.pack(side="right", padx=(0, 8))
+        vo.bind("<Button-1>", lambda e: (self._view_only_var.set(not self._view_only_var.get()), _toggle_view_only()))
+        self._hint = tk.Label(line, text="Enter — выполнить · Shift+Enter — новая строка · Ctrl+Shift+A — из любого места",
+                              font=_font(9), fg=theme.TEXT_MUTED, bg=theme.BG, anchor="w")
+        self._hint.pack(side="left")
 
+        # --- примеры ---
         tk.Label(body, text="Попробуй, например:", font=_font(9, True), fg=theme.TEXT_MUTED, bg=theme.BG,
-                 anchor="w").pack(fill="x")
-        for start in range(0, len(EXAMPLES), 2):          # по две подсказки в ряд — иначе не помещаются
+                 anchor="w").pack(fill="x", pady=(10, 0))
+        for start in range(0, len(EXAMPLES), 2):
             chips = tk.Frame(body, bg=theme.BG)
-            chips.pack(fill="x", pady=(4, 0))
+            chips.pack(fill="x", pady=(5, 0))
             for text in EXAMPLES[start:start + 2]:
                 _button(chips, text, lambda t=text: self._fill(t), "neutral", small=True).pack(side="left", padx=(0, 8))
 
-        row = tk.Frame(body, bg=theme.BG)
-        row.pack(fill="x", pady=(22, 0))
+        # --- низ: последние действия + состояние ---
+        grid = tk.Frame(body, bg=theme.BG)
+        grid.pack(fill="x", pady=(24, 0))
+        grid.grid_columnconfigure(0, weight=1)
+        grid.grid_columnconfigure(1, minsize=290)
+
+        left = tk.Frame(grid, bg=theme.BG)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 18))
+        head = tk.Frame(left, bg=theme.BG)
+        head.pack(fill="x", pady=(0, 8))
+        tk.Label(head, text="Последние действия", font=_font(12, True), bg=theme.BG, fg=theme.TEXT).pack(side="left")
+        _button(head, "Вся история →", lambda: self.show_page("history"), "ghost", small=True).pack(side="right")
+        recent = ui_kit.RoundCard(left, outer_bg=theme.BG, pad=6)
+        recent.pack(fill="x")
+        self._recent_frame = recent.body
+
+        right = tk.Frame(grid, bg=theme.BG)
+        right.grid(row=0, column=1, sticky="nsew")
+        tk.Label(right, text="Состояние", font=_font(12, True), bg=theme.BG, fg=theme.TEXT, anchor="w").pack(
+            fill="x", pady=(5, 8))
+        state = ui_kit.RoundCard(right, outer_bg=theme.BG, pad=14)
+        state.pack(fill="x")
         self._cards = {}
-        for i, (key, title) in enumerate([("gemini", "✨  Gemini API"), ("voice", "🎙  Голосовой ввод"),
-                                          ("local", "🧠  Локальная модель")]):
-            row.grid_columnconfigure(i, weight=1, uniform="cards")
-            card = _card(row)
-            card.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 8, 0))
-            tk.Frame(card, bg=theme.PRIMARY, height=3).pack(fill="x")      # цветная полоска сверху
-            tk.Label(card, text=title, font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
-                     anchor="w").pack(fill="x", padx=14, pady=(12, 2))
-            label = tk.Label(card, text="Проверяю…", font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED,
-                             anchor="w", justify="left", wraplength=200)
-            label.pack(fill="x", padx=14, pady=(0, 12))
+        for i, (key, title) in enumerate([("gemini", "Gemini API"), ("voice", "Голосовой ввод"),
+                                          ("local", "Локальная модель")]):
+            holder = tk.Frame(state.body, bg=theme.CARD_BG)
+            holder.pack(fill="x", pady=(0 if i == 0 else 10, 0))
+            tk.Label(holder, text=title, font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
+                     anchor="w").pack(fill="x")
+            label = tk.Label(holder, text="Проверяю…", font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED,
+                             anchor="w", justify="left", wraplength=230)
+            label.pack(fill="x", pady=(2, 0))
             self._cards[key] = label
             if key == "voice":
-                self._voice_fix_btn = _button(card, "🔧 Починить голосовой ввод", self._fix_voice, "primary", small=True)
-
-        head = tk.Frame(body, bg=theme.BG)
-        head.pack(fill="x", pady=(24, 6))
-        tk.Label(head, text="Последние действия", font=_font(13, True), bg=theme.BG, fg=theme.TEXT).pack(side="left")
-        _button(head, "Вся история →", lambda: self.show_page("history"), "ghost", small=True).pack(side="right")
-        self._recent_frame = _card(body)
-        self._recent_frame.pack(fill="x")
+                self._voice_fix_btn = _button(holder, "🔧 Починить голосовой ввод", self._fix_voice, "primary",
+                                              small=True)
+            if i < 2:
+                tk.Frame(state.body, bg=theme.BORDER, height=1).pack(fill="x", pady=(10, 0))
         return page
 
     def _on_enter(self, event):
@@ -533,22 +564,23 @@ class AppWindow:
             w.destroy()
         entries = history.get_all()[:5]
         if not entries:
-            tk.Label(frame, text="Пока пусто — напиши первую команду выше 👆", font=_font(10),
-                     fg=theme.TEXT_MUTED, bg=theme.CARD_BG, anchor="w").pack(fill="x", padx=14, pady=16)
+            tk.Label(frame, text="Пока пусто — напиши первую команду выше", font=_font(10),
+                     fg=theme.TEXT_MUTED, bg=theme.CARD_BG, anchor="w").pack(fill="x", padx=10, pady=14)
             return
-        for e in entries:
+        for n, e in enumerate(entries):
+            if n:
+                tk.Frame(frame, bg=theme.BORDER, height=1).pack(fill="x", padx=10)
             row = tk.Frame(frame, bg=theme.CARD_BG)
-            row.pack(fill="x", padx=14, pady=(10, 0))
+            row.pack(fill="x", padx=10, pady=9)
+            tk.Label(row, text=str(e.get("time", ""))[5:16], font=_font(9), fg=theme.TEXT_MUTED,
+                     bg=theme.CARD_BG).pack(side="right", padx=(10, 0))
             left = tk.Frame(row, bg=theme.CARD_BG)
             left.pack(side="left", fill="x", expand=True)
             tk.Label(left, text=e.get("command") or "—", font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
-                     anchor="w", justify="left", wraplength=560).pack(fill="x")
-            tk.Label(left, text=e.get("status", ""), font=_font(9), bg=theme.CARD_BG,
-                     fg=_status_color(e.get("status", "")), anchor="w", justify="left",
-                     wraplength=560).pack(fill="x")
-            tk.Label(row, text=str(e.get("time", ""))[5:16], font=_font(9), fg=theme.TEXT_MUTED,
-                     bg=theme.CARD_BG).pack(side="right")
-        tk.Frame(frame, bg=theme.CARD_BG, height=10).pack()
+                     anchor="w", justify="left", wraplength=400).pack(fill="x")
+            status = e.get("status", "")
+            tk.Label(left, text=_status_mark(status) + status, font=_font(9), bg=theme.CARD_BG,
+                     fg=_status_color(status), anchor="w", justify="left", wraplength=400).pack(fill="x")
 
     def _collect_status(self):
         data = {}
@@ -578,7 +610,7 @@ class AppWindow:
         if fix is not None:
             try:
                 if data.get("voice_fix"):
-                    fix.pack(anchor="w", padx=14, pady=(0, 12))
+                    fix.pack(anchor="w", pady=(6, 0))
                 else:
                     fix.pack_forget()
             except tk.TclError:
