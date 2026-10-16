@@ -299,3 +299,25 @@ class Chip(tk.Button):
                         activeforeground="#FFFFFF" if on else theme.TEXT)
         except tk.TclError:
             pass
+
+
+def style_ttk(root):
+    """Тёмные/светлые ttk-элементы (выпадающий список, полоса прокрутки) под текущую тему."""
+    from tkinter import ttk
+    try:
+        st = ttk.Style(root)
+        st.theme_use("clam")
+        st.configure("TCombobox", fieldbackground=theme.INPUT_BG, background=theme.CARD_BG, foreground=theme.TEXT,
+                     bordercolor=theme.BORDER, lightcolor=theme.INPUT_BG, darkcolor=theme.INPUT_BG,
+                     arrowcolor=theme.TEXT, selectbackground=theme.INPUT_BG, selectforeground=theme.TEXT, padding=5)
+        st.map("TCombobox", fieldbackground=[("readonly", theme.INPUT_BG)], foreground=[("readonly", theme.TEXT)],
+               background=[("active", theme.HOVER)])
+        st.configure("Vertical.TScrollbar", background=theme.TOGGLE_OFF, troughcolor=theme.BG, bordercolor=theme.BG,
+                     lightcolor=theme.TOGGLE_OFF, darkcolor=theme.TOGGLE_OFF, arrowcolor=theme.TEXT_MUTED, gripcount=0)
+        st.map("Vertical.TScrollbar", background=[("active", theme.TEXT_MUTED)])
+        root.option_add("*TCombobox*Listbox.background", theme.INPUT_BG)
+        root.option_add("*TCombobox*Listbox.foreground", theme.TEXT)
+        root.option_add("*TCombobox*Listbox.selectBackground", theme.FILL)
+        root.option_add("*TCombobox*Listbox.selectForeground", "#FFFFFF")
+    except Exception:
+        pass

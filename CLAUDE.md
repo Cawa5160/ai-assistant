@@ -13,6 +13,12 @@ Tkinter-ассистент: пишешь/говоришь команду → Gem
 - Ключ Gemini передаётся заголовком `x-goog-api-key` (не в URL).
 - Модель по умолчанию `gemini-3.5-flash` (config.py), запасные 2.5; возможный апгрейд до 3.8 Flash — ID не проверен.
 
+## Дизайн (v1.28.x)
+- Новое оформление в стиле концепта ChatGPT на чистом Tkinter: `ui_kit.py` (RoundCard, Toggle, Segmented, Swatches, NavItem, Chip, style_ttk), палитра и `FILLS` в `theme.py`.
+- Этапы 1–5 сделаны (настройки/меню, главная, история/расписание, проверка/диалоги, установщик). Значки меню — Segoe Fluent Icons (коды не проверены на ПК).
+- Картинки интерфейса на сервере: `xvfb-run` + заглушки модулей + `import -window root`.
+- Отложено: страница «Ассистент» (чат), см. ROADMAP.md.
+
 ## Как выпускать версию
 1. Править код; `python -m unittest discover -s tests` (21 тест, Windows не нужен).
 2. Поднять версию в `config.py` (`APP_VERSION`) и `tools/build_installer.py` (`APP_VERSION_LABEL`), записать в `CHANGELOG.md`.

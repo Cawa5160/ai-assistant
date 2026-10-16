@@ -14,7 +14,7 @@ import re
 import threading
 import time
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import scrolledtext, ttk
 
 from PIL import Image, ImageTk
 
@@ -203,7 +203,7 @@ class ScrollFrame(tk.Frame):
         super().__init__(parent, bg=bg)
         self.canvas = tk.Canvas(self, bg=bg, highlightthickness=0, bd=0)
         self.canvas._is_scroll_canvas = True
-        bar = tk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        bar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.inner = tk.Frame(self.canvas, bg=bg)
         self._window = self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
@@ -310,6 +310,7 @@ class AppWindow:
 
     def _build(self):
         theme.style_window(self.root)
+        ui_kit.style_ttk(self.root)
         self._pages = {}
         self._shell = tk.Frame(self.root, bg=theme.BG)
         self._shell.pack(fill="both", expand=True)
@@ -883,8 +884,9 @@ class AppWindow:
                      wraplength=680).pack(fill="x", pady=(0, 6))
 
     def _mem_row(self, parent, title, sub, buttons):
-        card = _card(parent)
+        card = ui_kit.RoundCard(parent, outer_bg=theme.BG, pad=4)
         card.pack(fill="x", pady=4)
+        card = card.body
         row = tk.Frame(card, bg=theme.CARD_BG)
         row.pack(fill="x", padx=14, pady=10)
         info = tk.Frame(row, bg=theme.CARD_BG)
@@ -908,8 +910,9 @@ class AppWindow:
         self._mem_title(box, "Макросы", "Выполни команду, потом впиши название ниже (или скажи «запомни как <имя>»). Клики в макросе привязаны к местам на экране.")
         import action_executor
         recent = [x for x in action_executor.RECENT_STEPS]
-        card = _card(box)
+        card = ui_kit.RoundCard(box, outer_bg=theme.BG, pad=4)
         card.pack(fill="x", pady=4)
+        card = card.body
         row = tk.Frame(card, bg=theme.CARD_BG)
         row.pack(fill="x", padx=14, pady=10)
         tk.Label(row, text=(f"Последняя команда: {len(recent)} шаг." if recent else "Сначала выполни любую команду — её шаги можно сохранить."),
@@ -946,8 +949,9 @@ class AppWindow:
         self._mem_title(box, "Заметки", "Факты о тебе — ИИ видит их при выполнении команд (как данные, не как приказы).")
         for i, n in enumerate(macros.notes()):
             self._mem_row(box, n, "", [("Удалить", lambda k=i: (macros.delete_note(k), self._refresh_memory()), "neutral")])
-        card = _card(box)
+        card = ui_kit.RoundCard(box, outer_bg=theme.BG, pad=4)
         card.pack(fill="x", pady=4)
+        card = card.body
         row = tk.Frame(card, bg=theme.CARD_BG)
         row.pack(fill="x", padx=14, pady=10)
         entry = tk.Entry(row, font=_font(11), relief="flat", bg=theme.INPUT_BG, fg=theme.TEXT, insertbackground=theme.TEXT,
@@ -972,8 +976,9 @@ class AppWindow:
             if not builtin:
                 btns.insert(0, ("Удалить", lambda n=name: (templates.delete_template(n), self._refresh_memory()), "neutral"))
             self._mem_row(box, name + ("  (встроенный)" if builtin else ""), "; ".join(items), btns)
-        card = _card(box)
+        card = ui_kit.RoundCard(box, outer_bg=theme.BG, pad=4)
         card.pack(fill="x", pady=4)
+        card = card.body
         form = tk.Frame(card, bg=theme.CARD_BG)
         form.pack(fill="x", padx=14, pady=10)
         tk.Label(form, text="Новый шаблон: имя и команды через «;»", font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED,
