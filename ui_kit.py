@@ -270,3 +270,32 @@ class NavItem(tk.Canvas):
             x = 46
         self.create_text(x, h / 2, text=self.text, fill=fg, font=_font(11 if not self.small else 10, self.active),
                          anchor="w")
+
+
+class Chip(tk.Button):
+    """Кнопка-«таблетка», включается и выключается (дни недели). Привязана к BooleanVar."""
+
+    def __init__(self, parent, text, variable, width=4):
+        super().__init__(parent, text=text, width=width, relief="flat", bd=0, pady=6, highlightthickness=1,
+                         highlightbackground=theme.BORDER, cursor="hand2", font=_font(10, True),
+                         command=lambda: variable.set(not bool(variable.get())))
+        self.var = variable
+        self._trace = variable.trace_add("write", lambda *a: self._paint())
+        self.bind("<Destroy>", self._on_destroy)
+        self._paint()
+
+    def _on_destroy(self, _e=None):
+        try:
+            self.var.trace_remove("write", self._trace)
+        except Exception:
+            pass
+
+    def _paint(self):
+        try:
+            on = bool(self.var.get())
+            bg = theme.FILL if on else theme.INPUT_BG
+            self._base_bg = bg
+            self.config(bg=bg, fg="#FFFFFF" if on else theme.TEXT, activebackground=bg,
+                        activeforeground="#FFFFFF" if on else theme.TEXT)
+        except tk.TclError:
+            pass

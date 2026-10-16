@@ -155,7 +155,14 @@ class _TimeField:
 
 
 def _page_hero(parent, title, subtitle):
-    return _hero(parent, title, subtitle, height=104)
+    """Заголовок страницы: крупное название и пояснение под ним (без цветного баннера)."""
+    frame = tk.Frame(parent, bg=theme.BG)
+    tk.Label(frame, text=title, font=_font(20, True), bg=theme.BG, fg=theme.TEXT, anchor="w").pack(fill="x")
+    sub = tk.Label(frame, text=subtitle, font=_font(10), bg=theme.BG, fg=theme.TEXT_MUTED, anchor="w",
+                   justify="left", wraplength=640)
+    sub.pack(fill="x", pady=(2, 0))
+    sub.bind("<Configure>", lambda e: sub.config(wraplength=max(200, e.width - 6)))
+    return frame
 
 
 def _status_color(status: str) -> str:
@@ -656,43 +663,73 @@ class AppWindow:
     def _build_history(self, parent):
         page = tk.Frame(parent, bg=theme.BG)
         _page_hero(page, "История команд", "Последние 20 команд. Пароли и похожие данные в истории скрыты.").pack(
-            fill="x", padx=32, pady=(26, 8))
-        head = tk.Frame(page, bg=theme.BG)
-        head.pack(fill="x", padx=32)
-        _button(head, "↻ Обновить", self.refresh, "neutral", small=True).pack(side="right")
+            fill="x", padx=32, pady=(26, 10))
+        bar = tk.Frame(page, bg=theme.BG)
+        bar.pack(fill="x", padx=32, pady=(0, 8))
+        self._hist_query = tk.StringVar(master=self.root)
+        self._hist_filter = tk.StringVar(master=self.root, value="all")
+        search = tk.Entry(bar, textvariable=self._hist_query, font=_font(10), relief="flat", bg=theme.INPUT_BG,
+                          fg=theme.TEXT, insertbackground=theme.TEXT, highlightthickness=1,
+                          highlightbackground=theme.BORDER, highlightcolor=theme.PRIMARY, width=30)
+        search.pack(side="left", ipady=5)
+        tk.Label(bar, text="Поиск по команде", font=_font(9), bg=theme.BG, fg=theme.TEXT_MUTED).pack(side="left", padx=8)
+        _button(bar, "↻ Обновить", self.refresh, "neutral", small=True).pack(side="right")
+        ui_kit.Segmented(bar, self._hist_filter, [("all", "Все"), ("ok", "✓ Успешно"), ("bad", "! Не вышло")]).pack(
+            side="right", padx=(0, 10))
+        self._hist_query.trace_add("write", lambda *a: self._render_history())
+        self._hist_filter.trace_add("write", lambda *a: self._render_history())
         self._history_scroll = ScrollFrame(page, theme.BG)
-        self._history_scroll.pack(fill="both", expand=True, padx=(32, 16), pady=10)
+        self._history_scroll.pack(fill="both", expand=True, padx=(32, 16), pady=(2, 10))
         return page
 
     def _refresh_history(self):
+        self._render_history()
+
+    def _render_history(self):
         inner = self._history_scroll.inner
         for w in inner.winfo_children():
             w.destroy()
-        entries = history.get_all()
+        query = self._hist_query.get().strip().lower()
+        mode = self._hist_filter.get()
+        entries = []
+        for e in history.get_all():
+            mark = _status_mark(e.get("status", "")).strip()
+            if mode == "ok" and mark != "✓":
+                continue
+            if mode == "bad" and mark not in ("!", "✕"):
+                continue
+            if query and query not in (e.get("command") or "").lower() and query not in (e.get("summary") or "").lower():
+                continue
+            entries.append(e)
         if not entries:
-            tk.Label(inner, text="Пока пусто — здесь появятся твои команды.", font=_font(10), fg=theme.TEXT_MUTED,
-                     bg=theme.BG, anchor="w").pack(fill="x", pady=12)
+            msg = "Пока пусто — здесь появятся твои команды." if not history.get_all() else "Ничего не найдено."
+            tk.Label(inner, text=msg, font=_font(10), fg=theme.TEXT_MUTED, bg=theme.BG, anchor="w").pack(
+                fill="x", pady=12)
             return
-        for e in entries:
-            card = _card(inner)
-            card.pack(fill="x", pady=5, padx=(0, 8))
-            top = tk.Frame(card, bg=theme.CARD_BG)
-            top.pack(fill="x", padx=14, pady=(10, 0))
-            tk.Label(top, text=e.get("command") or "—", font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
-                     anchor="w", justify="left", wraplength=520).pack(side="left", fill="x", expand=True)
-            tk.Label(top, text=_human_time(e.get("time", "")), font=_font(9), fg=theme.TEXT_MUTED,
-                     bg=theme.CARD_BG).pack(side="right")
-            if e.get("summary"):
-                tk.Label(card, text=e["summary"], font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w",
-                         justify="left", wraplength=620).pack(fill="x", padx=14, pady=(2, 0))
-            tk.Label(card, text=e.get("status", ""), font=_font(9), bg=theme.CARD_BG,
-                     fg=_status_color(e.get("status", "")), anchor="w", justify="left",
-                     wraplength=620).pack(fill="x", padx=14, pady=(2, 0))
+        card = ui_kit.RoundCard(inner, outer_bg=theme.BG, pad=6)
+        card.pack(fill="x", padx=(0, 8), pady=(0, 8))
+        frame = card.body
+        for n, e in enumerate(entries):
+            if n:
+                tk.Frame(frame, bg=theme.BORDER, height=1).pack(fill="x", padx=10)
+            row = tk.Frame(frame, bg=theme.CARD_BG)
+            row.pack(fill="x", padx=10, pady=10)
+            tk.Label(row, text=_human_time(e.get("time", "")), font=_font(9), fg=theme.TEXT_MUTED, bg=theme.CARD_BG,
+                     width=14, anchor="w").pack(side="left", anchor="n")
             if e.get("command"):
-                _button(card, "↻ Повторить", lambda c=e["command"]: self.c.repeat(c), "ghost",
-                        small=True).pack(anchor="e", padx=14, pady=(0, 10))
-            else:
-                tk.Frame(card, bg=theme.CARD_BG, height=10).pack()
+                _button(row, "↻ Повторить", lambda c=e["command"]: self.c.repeat(c), "ghost",
+                        small=True).pack(side="right", anchor="n", padx=(8, 0))
+            status = e.get("status", "")
+            tk.Label(row, text=_status_mark(status) + status, font=_font(9, True), bg=theme.CARD_BG,
+                     fg=_status_color(status), width=22, anchor="nw", justify="left",
+                     wraplength=170).pack(side="right", anchor="n")
+            mid = tk.Frame(row, bg=theme.CARD_BG)
+            mid.pack(side="left", fill="x", expand=True)
+            tk.Label(mid, text=e.get("command") or "—", font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
+                     anchor="w", justify="left", wraplength=300).pack(fill="x")
+            if e.get("summary"):
+                tk.Label(mid, text=e["summary"], font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w",
+                         justify="left", wraplength=300).pack(fill="x", pady=(2, 0))
 
     # ===================== РАСПИСАНИЕ =====================
 
@@ -707,12 +744,13 @@ class AppWindow:
         self._schedule_list = tk.Frame(body, bg=theme.BG)
         self._schedule_list.pack(fill="x")
 
-        tk.Label(body, text="Новая задача", font=_font(13, True), bg=theme.BG, fg=theme.TEXT,
-                 anchor="w").pack(fill="x", pady=(20, 6))
-        card = _card(body)
-        card.pack(fill="x")
+        tk.Label(body, text="Новая задача", font=_font(12, True), bg=theme.BG, fg=theme.TEXT,
+                 anchor="w").pack(fill="x", pady=(22, 8))
+        rc = ui_kit.RoundCard(body, outer_bg=theme.BG, pad=16)
+        rc.pack(fill="x")
+        card = rc.body
         form = tk.Frame(card, bg=theme.CARD_BG)
-        form.pack(fill="x", padx=14, pady=(14, 4))
+        form.pack(fill="x")
 
         tk.Label(form, text="Что сделать", font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
                  anchor="w").pack(fill="x")
@@ -755,15 +793,12 @@ class AppWindow:
         days_row.pack(fill="x", pady=(2, 0))
         for key, label in DAYS:
             var = tk.BooleanVar(master=self.root, value=key in ("mon", "tue", "wed", "thu", "fri"))
-            tk.Checkbutton(days_row, text=label, variable=var, indicatoron=False, width=4, pady=5,
-                           font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.NAV_ACTIVE,
-                           selectcolor=theme.NAV_ACTIVE, relief="flat", bd=0, highlightthickness=1,
-                           highlightbackground=theme.BORDER, cursor="hand2").pack(side="left", padx=(0, 6))
+            ui_kit.Chip(days_row, label, var).pack(side="left", padx=(0, 6))
             self._sch_days[key] = var
 
         self._sch_error = tk.Label(card, text="", font=_font(9), fg=theme.DANGER, bg=theme.CARD_BG, anchor="w")
-        self._sch_error.pack(fill="x", padx=14, pady=(6, 0))
-        _button(card, "➕ Добавить задачу", self._add_task, "success").pack(anchor="w", padx=14, pady=12)
+        self._sch_error.pack(fill="x", pady=(8, 0))
+        _button(card, "Добавить задачу", self._add_task, "primary").pack(anchor="w", pady=(8, 0))
         return page
 
     def _refresh_schedule(self):
@@ -776,26 +811,31 @@ class AppWindow:
                      bg=theme.BG, anchor="w").pack(fill="x", pady=4)
             return
         for t in tasks:
-            enabled = t.get("enabled", True)
-            card = _card(frame)
-            card.pack(fill="x", pady=4)
-            row = tk.Frame(card, bg=theme.CARD_BG)
-            row.pack(fill="x", padx=14, pady=10)
+            enabled = bool(t.get("enabled", True))
+            rc = ui_kit.RoundCard(frame, outer_bg=theme.BG, pad=14)
+            rc.pack(fill="x", pady=4)
+            row = tk.Frame(rc.body, bg=theme.CARD_BG)
+            row.pack(fill="x")
             tk.Label(row, text=str(t.get("time", "")), font=_font(20, True), bg=theme.CARD_BG,
-                     fg=theme.PRIMARY if enabled else theme.TEXT_MUTED).pack(side="left", padx=(0, 16))
+                     fg=theme.PRIMARY if enabled else theme.TEXT_MUTED).pack(side="left", padx=(0, 18))
+            var = tk.BooleanVar(master=self.root, value=enabled)
+            ui_kit.Toggle(row, var, command=lambda tid=t["id"], v=var: self._set_task(tid, v.get()),
+                          label="Задача включена").pack(side="right", padx=(10, 0))
+            _button(row, "Удалить", lambda tid=t["id"]: self._del_task(tid), "neutral", small=True).pack(side="right")
             info = tk.Frame(row, bg=theme.CARD_BG)
             info.pack(side="left", fill="x", expand=True)
             tk.Label(info, text=t.get("command", ""), font=_font(10, True), bg=theme.CARD_BG,
                      fg=theme.TEXT if enabled else theme.TEXT_MUTED, anchor="w", justify="left",
-                     wraplength=420).pack(fill="x")
+                     wraplength=380).pack(fill="x")
             sub = ("Один раз · " if t.get("once") else "") + _days_text(t.get("days", [])) + \
                   (f" · {scheduler.CONDITIONS.get(t['condition'], t['condition'])}" if t.get("condition") else "") + \
                   ("" if enabled else " · выключено")
-            tk.Label(info, text=sub, font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w").pack(fill="x")
-            _button(row, "Удалить", lambda tid=t["id"]: self._del_task(tid), "neutral", small=True).pack(side="right", padx=(6, 0))
-            _button(row, "Выключить" if enabled else "Включить",
-                    lambda tid=t["id"], cur=enabled: self._toggle_task(tid, cur), "neutral",
-                    small=True).pack(side="right")
+            tk.Label(info, text=sub, font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w",
+                     justify="left", wraplength=380).pack(fill="x")
+
+    def _set_task(self, task_id, enabled):
+        scheduler.set_enabled(task_id, bool(enabled))
+        self.root.after(30, self._refresh_schedule)
 
     def _toggle_task(self, task_id, current):
         scheduler.set_enabled(task_id, not current)
