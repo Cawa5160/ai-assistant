@@ -206,11 +206,26 @@ class ScrollFrame(tk.Frame):
         bar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.inner = tk.Frame(self.canvas, bg=bg)
         self._window = self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
-        self.inner.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(self._window, width=e.width))
+        self.inner.bind("<Configure>", lambda e: self._update_region())
+        self.canvas.bind("<Configure>", lambda e: (self.canvas.itemconfigure(self._window, width=e.width),
+                                                   self._update_region()))
         self.canvas.configure(yscrollcommand=bar.set)
         bar.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
+
+    def _update_region(self):
+        """Область прокрутки не меньше окна: если всё помещается, содержимое не «уезжает»."""
+        try:
+            h = max(self.inner.winfo_reqheight(), self.canvas.winfo_height())
+            self.canvas.configure(scrollregion=(0, 0, self.canvas.winfo_width(), h))
+            if self.inner.winfo_reqheight() <= self.canvas.winfo_height():
+                self.canvas.yview_moveto(0)
+        except tk.TclError:
+            pass
+
+    def scroll(self, units):
+        if self.inner.winfo_reqheight() > self.canvas.winfo_height():
+            self.canvas.yview_scroll(units, "units")
 
 
 # ---------- главное окно ----------
@@ -330,7 +345,9 @@ class AppWindow:
             if isinstance(w, tk.Text):
                 return
             if getattr(w, "_is_scroll_canvas", False):
-                w.yview_scroll(int(-event.delta / 120), "units")
+                owner = getattr(w, "master", None)
+                if hasattr(owner, "scroll"):
+                    owner.scroll(int(-event.delta / 120))
                 return
             w = getattr(w, "master", None)
 
@@ -1518,12 +1535,15 @@ class AppWindow:
         _button(head, "↻ Проверить снова", self.refresh, "neutral", small=True).pack(side="left", padx=8)
         _button(head, "📋 Копировать", self._copy_diag, "neutral", small=True).pack(side="left")
         _button(head, "🖱 Тест мыши", self._mouse_test, "primary", small=True).pack(side="left", padx=8)
-        self._diag_checks = tk.Frame(page, bg=theme.BG)
-        self._diag_checks.pack(fill="x", padx=32, pady=(12, 0))
-        self._diag_box = scrolledtext.ScrolledText(page, font=theme.FONT_MONO, wrap="word", bd=0, relief="flat",
-                                                   bg=theme.CARD_BG, fg=theme.TEXT, highlightthickness=1,
+        self._diag_scroll = ScrollFrame(page, theme.BG)
+        self._diag_scroll.pack(fill="both", expand=True, padx=(32, 16), pady=(10, 10))
+        body = self._diag_scroll.inner
+        self._diag_checks = tk.Frame(body, bg=theme.BG)
+        self._diag_checks.pack(fill="x", padx=(0, 8))
+        self._diag_box = scrolledtext.ScrolledText(body, font=theme.FONT_MONO, wrap="word", bd=0, relief="flat",
+                                                   height=16, bg=theme.CARD_BG, fg=theme.TEXT, highlightthickness=1,
                                                    highlightbackground=theme.BORDER, padx=10, pady=8)
-        self._diag_box.pack(fill="both", expand=True, padx=32, pady=12)
+        self._diag_box.pack(fill="x", padx=(0, 8), pady=12)
         self._diag_box.config(state="disabled")
         return page
 
@@ -1565,6 +1585,11 @@ class AppWindow:
     def _mouse_test(self):
         """Двигает курсор по экрану и кликает по своей кнопке — показывает, где именно ломается управление мышью."""
         self._set_text(self._diag_box, "Тест мыши: не трогай мышь ~10 секунд…")
+        try:
+            self.root.update_idletasks()
+            self._diag_scroll.canvas.yview_moveto(1.0)
+        except Exception:
+            pass
         threading.Thread(target=self._run_mouse_test, daemon=True).start()
 
     def _run_mouse_test(self):
@@ -1597,6 +1622,7 @@ class AppWindow:
                 win.title("Тест клика")
                 win.attributes("-topmost", True)
                 win.geometry("260x120+300+300")
+                win.lift()
                 hit = {"n": 0}
 
                 def pressed():
@@ -1624,7 +1650,15 @@ class AppWindow:
                 lines.append("\nКурсор двигается, но клик не срабатывает — пришли этот текст.")
         except Exception as e:
             lines.append(f"Ошибка теста: {e}")
-        ui_thread.post(self._set_text, self._diag_box, "\n".join(lines))
+        ui_thread.post(self._show_mouse_result, "\n".join(lines))
+
+    def _show_mouse_result(self, text):
+        self._set_text(self._diag_box, text)
+        try:
+            self.root.update_idletasks()
+            self._diag_scroll.canvas.yview_moveto(1.0)
+        except Exception:
+            pass
 
     def _copy_diag(self):
         try:
