@@ -21,11 +21,18 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_PATH = os.path.join(BASE_DIR, "assets", "logo_128.png")
 ICON_PATH = os.path.join(BASE_DIR, "assets", "app.ico")
 
-PRIMARY = "#4F46E5"
-SUCCESS = "#16A34A"
-DANGER = "#DC2626"
-BG = "#FAFAFA"
-TEXT_MUTED = "#6B7280"
+PRIMARY = "#4F46E5"      # заливка кнопок (белый текст, контраст ≥ 4.5)
+SUCCESS = "#4ADE80"
+DANGER = "#F87171"
+WARN = "#FBBF24"
+BG = "#0E1424"
+SIDE = "#0A0F1C"
+CARD = "#151C30"
+INPUT = "#0B1020"
+BORDER = "#27314F"
+TEXT = "#EAF0FF"
+TEXT_MUTED = "#93A0BE"
+STEPS = ["Подготовка", "Компоненты", "Проверка", "Готово"]
 
 REQUIREMENTS = os.path.join(BASE_DIR, "requirements.txt")   # единственный список зависимостей
 # Без этого программа не запустится; остальное (озвучка, уведомления, ключи в хранилище, голос) необязательно.
@@ -77,7 +84,7 @@ class InstallerApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("AI Ассистент — установка")
-        self.root.geometry("480x520")
+        self.root.geometry("760x500")
         self.root.resizable(False, False)
         self.root.configure(bg=BG)
         self.root.option_add("*Button.relief", "flat")
@@ -94,38 +101,88 @@ class InstallerApp:
         self._done = False
         self._failed = {}      # пакет -> почему pip не смог
         self._missing = []     # пакеты, которые не импортируются даже после установки
+        self._step = 0
 
         self._build_ui()
         self.root.after(200, self._poll_queue)
         threading.Thread(target=self._run_install, daemon=True).start()
 
     def _build_ui(self):
+        # слева — шаги установки
+        side = tk.Frame(self.root, bg=SIDE, width=230)
+        side.pack(side="left", fill="y")
+        side.pack_propagate(False)
+        head = tk.Frame(side, bg=SIDE)
+        head.pack(fill="x", padx=20, pady=(26, 22))
         try:
             from PIL import Image, ImageTk
-            img = Image.open(LOGO_PATH)
+            img = Image.open(LOGO_PATH).resize((36, 36))
             self._logo = ImageTk.PhotoImage(img)
-            tk.Label(self.root, image=self._logo, bg=BG).pack(pady=(24, 8))
+            tk.Label(head, image=self._logo, bg=SIDE).pack(side="left")
         except Exception:
-            tk.Label(self.root, text="🖱️", font=("Segoe UI", 40), bg=BG).pack(pady=(24, 8))
+            tk.Label(head, text="🖱", font=("Segoe UI", 18), bg=SIDE, fg=TEXT).pack(side="left")
+        tk.Label(head, text="AI Ассистент", font=("Segoe UI", 13, "bold"), bg=SIDE, fg=TEXT).pack(side="left", padx=10)
+        self._step_labels = []
+        for text in STEPS:
+            lab = tk.Label(side, text="", font=("Segoe UI", 10), bg=SIDE, fg=TEXT_MUTED, anchor="w")
+            lab.pack(fill="x", padx=22, pady=7)
+            self._step_labels.append((lab, text))
+        tk.Label(side, text=f"Папка установки:\n{BASE_DIR}", font=("Segoe UI", 8), fg=TEXT_MUTED, bg=SIDE,
+                 wraplength=190, justify="left", anchor="w").pack(side="bottom", fill="x", padx=22, pady=16)
 
-        tk.Label(self.root, text="AI Ассистент", font=("Segoe UI", 16, "bold"), bg=BG).pack()
-        tk.Label(self.root, text="Установка зависимостей…", font=("Segoe UI", 9),
-                 fg=TEXT_MUTED, bg=BG).pack(pady=(2, 16))
+        # справа — прогресс, журнал, кнопки
+        main = tk.Frame(self.root, bg=BG)
+        main.pack(side="left", fill="both", expand=True, padx=28, pady=(26, 18))
+        self.title_label = tk.Label(main, text="Установка", font=("Segoe UI", 18, "bold"), bg=BG, fg=TEXT, anchor="w")
+        self.title_label.pack(fill="x")
+        self.status_label = tk.Label(main, text="Подготовка…", font=("Segoe UI", 10), fg=TEXT_MUTED, bg=BG,
+                                     anchor="w", justify="left", wraplength=440)
+        self.status_label.pack(fill="x", pady=(4, 12))
 
-        self.progress = ttk.Progressbar(self.root, length=380, mode="determinate", maximum=100)
-        self.progress.pack(pady=(0, 10))
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure("Inst.Horizontal.TProgressbar", troughcolor=INPUT, background=PRIMARY, bordercolor=BORDER,
+                        lightcolor=PRIMARY, darkcolor=PRIMARY, thickness=10)
+        self.progress = ttk.Progressbar(main, mode="determinate", maximum=100, style="Inst.Horizontal.TProgressbar")
+        self.progress.pack(fill="x", pady=(0, 12))
 
-        self.status_label = tk.Label(self.root, text="Подготовка…", font=("Segoe UI", 9),
-                                      fg=TEXT_MUTED, bg=BG, wraplength=420)
-        self.status_label.pack(pady=(0, 20))
+        self.log_box = tk.Text(main, height=9, font=("Consolas", 9), bg=CARD, fg=TEXT_MUTED, relief="flat", bd=0,
+                               highlightthickness=1, highlightbackground=BORDER, padx=10, pady=8, wrap="word",
+                               state="disabled")
+        self.log_box.pack(fill="both", expand=True)
+        self.btn_frame = tk.Frame(main, bg=BG)
+        self.btn_frame.pack(fill="x", pady=(12, 0))
+        # Кнопки и галочки появятся после завершения установки (см. _show_done_buttons)
+        self._set_step(0)
+        self._log("Начинаю установку.")
 
-        self.btn_frame = tk.Frame(self.root, bg=BG)
-        self.btn_frame.pack(pady=10)
-        # Кнопки появятся после завершения установки (см. _show_done_buttons)
+    def _set_step(self, n):
+        self._step = n
+        for i, (lab, text) in enumerate(self._step_labels):
+            if i < n:
+                lab.config(text=f"✓  {text}", fg=SUCCESS, font=("Segoe UI", 10))
+            elif i == n:
+                lab.config(text=f"●  {text}", fg=TEXT, font=("Segoe UI", 10, "bold"))
+            else:
+                lab.config(text=f"○  {text}", fg=TEXT_MUTED, font=("Segoe UI", 10))
 
-        self.footer = tk.Label(self.root, text=f"Папка установки: {BASE_DIR}",
-                                font=("Segoe UI", 7), fg=TEXT_MUTED, bg=BG, wraplength=440)
-        self.footer.pack(side="bottom", pady=8)
+    def _log(self, text):
+        try:
+            self.log_box.config(state="normal")
+            self.log_box.insert("end", text + "\n")
+            self.log_box.see("end")
+            self.log_box.config(state="disabled")
+        except tk.TclError:
+            pass
+
+    def _button(self, parent, text, command, primary=False, width=None):
+        bg = PRIMARY if primary else "#3A4568"
+        return tk.Button(parent, text=text, command=command, bg=bg, fg="white", activebackground=bg,
+                         activeforeground="white", font=("Segoe UI", 10, "bold" if primary else "normal"),
+                         width=width or 0, padx=14, cursor="hand2")
 
     # ---------- фоновая установка ----------
 
@@ -146,12 +203,17 @@ class InstallerApp:
         self._close_running_app()
         self._failed, self._missing = {}, []
         self._queue.put(("progress", 8))
+        self._queue.put(("step", 1))
         self._queue.put(("status", "Ставлю компоненты программы (1–3 минуты)…"))
+        self._queue.put(("log", "Устанавливаю компоненты из requirements.txt…"))
         self._install_all()
         self._queue.put(("progress", 85))
+        self._queue.put(("step", 2))
         self._queue.put(("status", "Проверяю, что всё запускается…"))
+        self._queue.put(("log", "Проверяю, что все компоненты импортируются…"))
         self._verify_imports()
         self._queue.put(("progress", 100))
+        self._queue.put(("step", 3))
         self._queue.put(("done", None))
 
     def _pip(self, specs, timeout):
@@ -162,11 +224,13 @@ class InstallerApp:
         specs = read_requirements()
         try:
             if self._pip(specs, 900).returncode == 0:
+                self._queue.put(("log", f"✓ Все компоненты поставились разом ({len(specs)})."))
                 return
         except Exception:
             pass
         # Один сбойный пакет не должен срывать установку остальных (общий pip install — "всё или ничего"):
         # ставим по одному и записываем, что именно не встало и почему.
+        self._queue.put(("log", "Общая установка не прошла — ставлю по одному."))
         for i, spec in enumerate(specs, 1):
             name = package_name(spec)
             self._queue.put(("status", f"Ставлю {name}… ({i}/{len(specs)})"))
@@ -176,8 +240,12 @@ class InstallerApp:
                 if proc.returncode != 0:
                     tail = " ".join((proc.stderr or proc.stdout or "").strip().splitlines()[-2:])
                     self._failed[name] = tail[:200] or "pip завершился с ошибкой"
+                    self._queue.put(("log", f"✕ {name}: {self._failed[name]}"))
+                else:
+                    self._queue.put(("log", f"✓ {name}"))
             except Exception as e:
                 self._failed[name] = str(e)[:200]
+                self._queue.put(("log", f"✕ {name}: {self._failed[name]}"))
 
     def _verify_imports(self):
         names = [IMPORT_NAME.get(package_name(sp).lower(), package_name(sp)) for sp in read_requirements()]
@@ -189,6 +257,8 @@ class InstallerApp:
         try:
             out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120).stdout
             self._missing = [n for n in out.strip().split(",") if n]
+            self._queue.put(("log", ("✕ Не запускаются: " + ", ".join(self._missing)) if self._missing
+                             else "✓ Всё запускается."))
         except Exception:
             pass
 
@@ -201,6 +271,10 @@ class InstallerApp:
                 self.progress["value"] = value
             elif kind == "status":
                 self.status_label.config(text=value)
+            elif kind == "step":
+                self._set_step(value)
+            elif kind == "log":
+                self._log(value)
             elif kind == "done":
                 self._on_install_done()
 
@@ -224,24 +298,33 @@ class InstallerApp:
             return
         if optional:
             self.status_label.config(
-                text=f"Готово. Не встали необязательные компоненты: {', '.join(optional)}.\n"
-                     "Программа работает; для голоса есть кнопка «Починить» в самом приложении.", fg="#B45309")
+                text=f"Не встали необязательные компоненты: {', '.join(optional)}.\n"
+                     "Программа работает; для голоса есть кнопка «Починить» в самом приложении.", fg=WARN)
         else:
-            self.status_label.config(text="Готово! Все компоненты установлены и проверены.", fg=SUCCESS)
+            self.status_label.config(text="Все компоненты установлены и проверены.", fg=SUCCESS)
+        self._set_step(4)
+        self.title_label.config(text="Готово")
         self._show_done_buttons()
 
     def _show_retry_buttons(self):
+        self.title_label.config(text="Есть проблема")
         for w in self.btn_frame.winfo_children():
             w.destroy()
-        tk.Button(self.btn_frame, text="↻ Повторить установку", bg=PRIMARY, fg="white",
-                  font=("Segoe UI", 10, "bold"), width=34, command=self._retry).pack(pady=(14, 4))
-        tk.Button(self.btn_frame, text="Продолжить всё равно", width=34,
-                  command=self._show_done_buttons).pack(pady=4)
+        self._button(self.btn_frame, "Повторить установку", self._retry, primary=True).pack(side="left")
+        self._button(self.btn_frame, "Продолжить всё равно", self._continue_anyway).pack(side="left", padx=10)
+
+    def _continue_anyway(self):
+        self._set_step(4)
+        self._show_done_buttons()
 
     def _retry(self):
         for w in self.btn_frame.winfo_children():
             w.destroy()
         self.progress["value"] = 0
+        self.title_label.config(text="Установка")
+        self.status_label.config(fg=TEXT_MUTED)
+        self._set_step(0)
+        self._log("— Повторная установка —")
         self._done = False
         self.root.after(150, self._poll_queue)
         threading.Thread(target=self._run_install, daemon=True).start()
@@ -258,14 +341,14 @@ class InstallerApp:
         for var, text in ((self.var_desktop, "Ярлык на рабочем столе"),
                           (self.var_start, "Ярлык в меню Пуск"),
                           (self.var_autostart, "Запускать вместе с Windows (сразу в трее)")):
-            tk.Checkbutton(self.btn_frame, text=text, variable=var, bg=BG, anchor="w",
-                           font=("Segoe UI", 10)).pack(fill="x", padx=40)
+            tk.Checkbutton(self.btn_frame, text=text, variable=var, bg=BG, fg=TEXT, anchor="w",
+                           selectcolor=INPUT, activebackground=BG, activeforeground=TEXT, highlightthickness=0, bd=0,
+                           font=("Segoe UI", 10)).pack(fill="x")
 
-        tk.Button(self.btn_frame, text="🚀 Готово — запустить AI Ассистент", bg=PRIMARY, fg="white",
-                  font=("Segoe UI", 10, "bold"), width=34,
-                  command=lambda: self._finish(launch=True)).pack(pady=(14, 4))
-        tk.Button(self.btn_frame, text="Готово — только закрыть", width=34,
-                  command=lambda: self._finish(launch=False)).pack(pady=4)
+        row = tk.Frame(self.btn_frame, bg=BG)
+        row.pack(fill="x", pady=(10, 0))
+        self._button(row, "Запустить AI Ассистент", lambda: self._finish(launch=True), primary=True).pack(side="left")
+        self._button(row, "Только закрыть", lambda: self._finish(launch=False)).pack(side="left", padx=10)
 
     def _finish(self, launch: bool):
         """Применяет выбранное (ярлыки, автозапуск), затем запускает приложение или закрывается."""
@@ -301,7 +384,7 @@ class InstallerApp:
                                           "Настройки → Запуск в главном окне.)", fg=DANGER)
             for w in self.btn_frame.winfo_children():
                 w.destroy()
-            tk.Button(self.btn_frame, text="Закрыть", width=20, command=self.root.destroy).pack(pady=8)
+            self._button(self.btn_frame, "Закрыть", self.root.destroy, primary=True).pack(anchor="w", pady=8)
         else:
             self.root.destroy()
 
