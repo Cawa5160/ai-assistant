@@ -22,6 +22,7 @@ import config
 import history
 import scheduler
 import theme
+import ui_kit
 import ui_thread
 import voice_input
 
@@ -33,6 +34,9 @@ NAV = [
     ("settings", "⚙️", "Настройки"),
     ("diag", "🩺", "Проверка системы"),
 ]
+
+NAV_GLYPHS = {"home": "\uE80F", "history": "\uE81C", "schedule": "\uE787", "memory": "\uE8F1",
+              "settings": "\uE713", "diag": "\uE9D9"}     # значки Segoe Fluent / MDL2 (на Windows 10/11)
 
 EXAMPLES = [
     "Открой браузер",
@@ -54,9 +58,9 @@ def _font(size=10, bold=False):
 
 def _button(parent, text, command, kind="primary", small=False, **kw):
     colors = {
-        "primary": (theme.PRIMARY, "#FFFFFF"),
-        "success": (theme.SUCCESS, "#FFFFFF"),
-        "danger": (theme.DANGER, "#FFFFFF"),
+        "primary": (theme.FILL, "#FFFFFF"),
+        "success": ("#15803D", "#FFFFFF"),
+        "danger": ("#B91C1C", "#FFFFFF"),
         "neutral": (theme.CARD_BG, theme.TEXT),
         "ghost": (theme.BG, theme.PRIMARY),
     }
@@ -314,14 +318,15 @@ class AppWindow:
 
     def _build_sidebar(self, parent):
         bg = theme.SIDEBAR_BG
-        sb = tk.Frame(parent, bg=bg, width=268)
+        sb = tk.Frame(parent, bg=bg, width=250)
         sb.pack(side="left", fill="y")
         sb.pack_propagate(False)
+        tk.Frame(parent, bg=theme.BORDER, width=1).pack(side="left", fill="y")
 
         head = tk.Frame(sb, bg=bg)
-        head.pack(fill="x", padx=16, pady=(22, 20))
+        head.pack(fill="x", padx=18, pady=(24, 22))
         try:
-            self._logo_img = ImageTk.PhotoImage(Image.open(theme.LOGO_64_PATH).resize((40, 40), Image.LANCZOS))
+            self._logo_img = ImageTk.PhotoImage(Image.open(theme.LOGO_64_PATH).resize((36, 36), Image.LANCZOS))
             tk.Label(head, image=self._logo_img, bg=bg).pack(side="left")
         except Exception:
             pass
@@ -329,33 +334,25 @@ class AppWindow:
 
         self._nav_items = {}
         for key, icon, title in NAV:
-            item = tk.Label(sb, text=f"  {icon}   {title}", anchor="w", font=_font(11), bg=bg, fg=theme.TEXT,
-                            padx=10, pady=11, cursor="hand2")
-            item.pack(fill="x", padx=10, pady=1)
-            item.bind("<Button-1>", lambda e, k=key: self.show_page(k))
-            item.bind("<Enter>", lambda e, k=key: self._nav_hover(k, True))
-            item.bind("<Leave>", lambda e, k=key: self._nav_hover(k, False))
+            item = ui_kit.NavItem(sb, title, lambda k=key: self.show_page(k), glyph=NAV_GLYPHS.get(key),
+                                  emoji=icon, bg=bg)
+            item.pack(fill="x", padx=12, pady=2)
             self._nav_items[key] = item
 
         bottom = tk.Frame(sb, bg=bg)
-        bottom.pack(side="bottom", fill="x", padx=16, pady=16)
-        self._status_dot = tk.Label(bottom, text="● Готов", font=_font(9), bg=bg, fg=theme.SUCCESS, anchor="w")
+        bottom.pack(side="bottom", fill="x", padx=14, pady=16)
+        card = ui_kit.RoundCard(bottom, outer_bg=bg, fill=theme.CARD_BG, radius=12, pad=12)
+        card.pack(fill="x")
+        self._status_dot = tk.Label(card.body, text="● Готов к работе", font=_font(10, True), bg=theme.CARD_BG,
+                                    fg=theme.SUCCESS, anchor="w")
         self._status_dot.pack(fill="x")
-        tk.Label(bottom, text=f"v{config.APP_VERSION} · работает в фоне", font=_font(8), fg=theme.TEXT_MUTED,
-                 bg=bg, anchor="w").pack(fill="x", pady=(2, 10))
-        _button(bottom, "🚪  Выйти из приложения", self.c.quit, "neutral", small=True).pack(fill="x")
-
-    def _nav_hover(self, key, inside):
-        if key == self._page_name:
-            return
-        self._nav_items[key].config(bg=theme.BORDER if inside else theme.SIDEBAR_BG)
+        tk.Label(card.body, text=f"v{config.APP_VERSION} · работает в фоне", font=_font(8), fg=theme.TEXT_MUTED,
+                 bg=theme.CARD_BG, anchor="w").pack(fill="x", pady=(2, 0))
+        _button(bottom, "Выйти из приложения", self.c.quit, "neutral", small=True).pack(fill="x", pady=(10, 0))
 
     def _highlight_nav(self):
         for key, item in self._nav_items.items():
-            if key == self._page_name:
-                item.config(bg=theme.NAV_ACTIVE, fg=theme.PRIMARY, font=_font(11, True))
-            else:
-                item.config(bg=theme.SIDEBAR_BG, fg=theme.TEXT, font=_font(11))
+            item.set_active(key == self._page_name)
 
     def show_page(self, name):
         if name not in dict((k, 1) for k, _, _ in NAV):
@@ -387,7 +384,7 @@ class AppWindow:
             if self._busy:
                 self._status_dot.config(text="● Выполняется…", fg=theme.WARNING)
             else:
-                self._status_dot.config(text="● Готов", fg=theme.SUCCESS)
+                self._status_dot.config(text="● Готов к работе", fg=theme.SUCCESS)
             banner = getattr(self, "_busy_banner", None)
             if banner is not None:
                 if self._busy:
@@ -929,16 +926,31 @@ class AppWindow:
     # ===================== НАСТРОЙКИ =====================
 
     def _section(self, parent, title, note=None):
-        tk.Label(parent, text=title, font=_font(13, True), bg=theme.BG, fg=theme.TEXT,
-                 anchor="w").pack(fill="x", pady=(20, 6))
-        card = _card(parent)
+        tk.Label(parent, text=title, font=_font(12, True), bg=theme.BG, fg=theme.TEXT,
+                 anchor="w").pack(fill="x", pady=(18, 8))
+        card = ui_kit.RoundCard(parent, outer_bg=theme.BG, pad=16)
         card.pack(fill="x")
-        inner = tk.Frame(card, bg=theme.CARD_BG)
-        inner.pack(fill="x", padx=14, pady=12)
+        inner = card.body
         if note:
             tk.Label(inner, text=note, font=_font(9), fg=theme.TEXT_MUTED, bg=theme.CARD_BG, anchor="w",
-                     justify="left", wraplength=660).pack(fill="x", pady=(0, 6))
+                     justify="left", wraplength=640).pack(fill="x", pady=(0, 6))
         return inner
+
+    def _switch(self, parent, text, var, note=None):
+        """Строка «текст — переключатель». Клик по тексту тоже переключает."""
+        row = tk.Frame(parent, bg=theme.CARD_BG)
+        row.pack(fill="x", pady=7)
+        box = tk.Frame(row, bg=theme.CARD_BG)
+        box.pack(side="left", fill="x", expand=True)
+        title = tk.Label(box, text=text, font=_font(10), bg=theme.CARD_BG, fg=theme.TEXT, anchor="w",
+                         justify="left", wraplength=560, cursor="hand2")
+        title.pack(fill="x")
+        title.bind("<Button-1>", lambda e: var.set(not bool(var.get())))
+        if note:
+            tk.Label(box, text=note, font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w",
+                     justify="left", wraplength=560).pack(fill="x", pady=(1, 0))
+        ui_kit.Toggle(row, var, label=text).pack(side="right", padx=(14, 0))
+        tk.Frame(parent, bg=theme.BORDER, height=1).pack(fill="x")
 
     def _field_label(self, parent, text):
         tk.Label(parent, text=text, font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
@@ -964,18 +976,40 @@ class AppWindow:
         import secure_store
 
         cur = config.load()
-        page = ScrollFrame(parent, theme.BG)
-        body = tk.Frame(page.inner, bg=theme.BG)
-        body.pack(fill="both", expand=True, padx=32, pady=26)
-        _page_hero(body, "Настройки", "Ключи Gemini, внешний вид, управление и голос. Не забудь нажать «Сохранить» внизу.").pack(fill="x")
+        page = tk.Frame(parent, bg=theme.BG)
+
+        head = tk.Frame(page, bg=theme.BG)
+        head.pack(fill="x", padx=32, pady=(26, 8))
+        tk.Label(head, text="Настройки", font=_font(20, True), bg=theme.BG, fg=theme.TEXT, anchor="w").pack(fill="x")
+        tk.Label(head, text="Ключи Gemini, внешний вид, управление, голос и Telegram. Изменения применяются кнопкой «Сохранить».",
+                 font=_font(10), bg=theme.BG, fg=theme.TEXT_MUTED, anchor="w").pack(fill="x", pady=(2, 0))
+
+        # панель сохранения всегда видна внизу, а не в конце длинной страницы
+        bar = tk.Frame(page, bg=theme.SIDEBAR_BG)
+        bar.pack(side="bottom", fill="x")
+        tk.Frame(bar, bg=theme.BORDER, height=1).pack(fill="x")
+        barin = tk.Frame(bar, bg=theme.SIDEBAR_BG)
+        barin.pack(fill="x", padx=32, pady=12)
+        _button(barin, "Сохранить настройки", self._save_settings, "primary").pack(side="left")
+        self._s_status = tk.Label(barin, text="", font=_font(10), bg=theme.SIDEBAR_BG, fg=theme.SUCCESS, anchor="w",
+                                  justify="left", wraplength=560)
+        self._s_status.pack(side="left", padx=14)
+
+        main = tk.Frame(page, bg=theme.BG)
+        main.pack(fill="both", expand=True)
+        subnav = tk.Frame(main, bg=theme.BG, width=210)
+        subnav.pack(side="left", fill="y", padx=(24, 0), pady=(8, 0))
+        subnav.pack_propagate(False)
+        scroll = ScrollFrame(main, theme.BG)
+        scroll.pack(side="left", fill="both", expand=True)
+        body = tk.Frame(scroll.inner, bg=theme.BG)
+        body.pack(fill="both", expand=True, padx=(24, 32), pady=(0, 20))
 
         sv = self._sv = {}
 
-        # ---- вкладки внутри Настроек ----
-        tab_defs = [("ai", "🤖  ИИ"), ("look", "🎨  Внешний вид"), ("ctrl", "🕹  Управление"),
-                    ("voice", "🎙  Голос"), ("tg", "✈  Telegram"), ("sys", "⚙  Запуск")]
-        tabbar = tk.Frame(body, bg=theme.BG)
-        tabbar.pack(fill="x", pady=(14, 0))
+        # ---- разделы настроек (слева) ----
+        tab_defs = [("ai", "ИИ и ключи"), ("look", "Внешний вид"), ("ctrl", "Управление"),
+                    ("voice", "Голос"), ("tg", "Telegram"), ("sys", "Запуск")]
         holder = tk.Frame(body, bg=theme.BG)
         holder.pack(fill="x")
         tabs, tab_buttons = {}, {}
@@ -985,18 +1019,17 @@ class AppWindow:
                 f.pack_forget()
             tabs[key].pack(fill="x")
             for k, btn in tab_buttons.items():
-                active = k == key
-                btn.config(bg=theme.PRIMARY if active else theme.CARD_BG,
-                           fg="#FFFFFF" if active else theme.TEXT)
-                btn._base_bg = btn.cget("bg")
+                btn.set_active(k == key)
             self._settings_tab = key
+            try:
+                scroll.canvas.yview_moveto(0)
+            except Exception:
+                pass
 
         for key, label in tab_defs:
             tabs[key] = tk.Frame(holder, bg=theme.BG)
-            btn = tk.Button(tabbar, text=label, font=_font(10, True), relief="flat", bd=0, padx=14, pady=7,
-                            cursor="hand2", highlightthickness=1, highlightbackground=theme.BORDER,
-                            command=lambda k=key: show_tab(k))
-            btn.pack(side="left", padx=(0, 6))
+            btn = ui_kit.NavItem(subnav, label, lambda k=key: show_tab(k), bg=theme.BG, height=40, small=True)
+            btn.pack(fill="x", pady=1)
             tab_buttons[key] = btn
 
         secure = ("🔒 Ключи хранятся в защищённом хранилище Windows." if secure_store.is_available()
@@ -1026,31 +1059,17 @@ class AppWindow:
 
         s = self._section(tabs["look"], "Внешний вид")
         sv["theme"] = tk.StringVar(master=self.root, value=cur.get("theme", "light"))
-        row = tk.Frame(s, bg=theme.CARD_BG)
-        row.pack(anchor="w")
-        for value, label in theme.THEME_LABELS.items():
-            tk.Radiobutton(row, text=label, value=value, variable=sv["theme"], bg=theme.CARD_BG, fg=theme.TEXT,
-                           activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
-                           font=_font(10)).pack(side="left", padx=(0, 16))
-
+        self._field_label(s, "Тема оформления (применится после «Сохранить настройки»)")
+        ui_kit.Segmented(s, sv["theme"], list(theme.THEME_LABELS.items())).pack(anchor="w", pady=(0, 6))
         self._field_label(s, "Акцентный цвет")
         sv["accent"] = tk.StringVar(master=self.root, value=cur.get("accent", "indigo"))
-        arow = tk.Frame(s, bg=theme.CARD_BG)
-        arow.pack(anchor="w")
-        for value, label in theme.ACCENT_LABELS.items():
-            tk.Radiobutton(arow, text=label, value=value, variable=sv["accent"], bg=theme.CARD_BG, fg=theme.TEXT,
-                           activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
-                           font=_font(10)).pack(side="left", padx=(0, 14))
+        ui_kit.Swatches(s, sv["accent"], theme.FILLS).pack(anchor="w", pady=(2, 2))
 
         s = self._section(tabs["ctrl"], "Управление")
         sv["view_only"] = tk.BooleanVar(master=self.root, value=bool(cur.get("view_only", False)))
-        tk.Checkbutton(s, text="👁 Режим «только смотреть»: ИИ отвечает про экран, но ничего не нажимает и не печатает",
-                       variable=sv["view_only"], bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG,
-                       selectcolor=theme.INPUT_BG, font=_font(10), wraplength=640, justify="left").pack(anchor="w", pady=(0, 8))
+        self._switch(s, "Режим «только смотреть»: ИИ отвечает про экран, но ничего не нажимает и не печатает", sv["view_only"])
         sv["use_fallback"] = tk.BooleanVar(master=self.root, value=bool(cur.get("use_fallback_models", True)))
-        tk.Checkbutton(s, text="🔁 При лимите основной модели пробовать запасные (у каждой модели свой бесплатный лимит)",
-                       variable=sv["use_fallback"], bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG,
-                       selectcolor=theme.INPUT_BG, font=_font(10), wraplength=640, justify="left").pack(anchor="w", pady=(0, 4))
+        self._switch(s, "При лимите основной модели пробовать запасные (у каждой модели свой бесплатный лимит)", sv["use_fallback"])
         self._field_label(s, "Запасные модели (через запятую; доступные — кнопка «Найти доступные модели» в карточке Gemini)")
         sv["fallback_models"] = tk.StringVar(master=self.root, value=", ".join(cur.get("fallback_models") or []))
         self._entry(s, sv["fallback_models"], 44)
@@ -1071,13 +1090,9 @@ class AppWindow:
 
         s = self._section(tabs["voice"], "Голос")
         sv["voice_feedback"] = tk.BooleanVar(master=self.root, value=cur.get("voice_feedback_enabled", False))
-        tk.Checkbutton(s, text="Озвучивать действия голосом (офлайн)", variable=sv["voice_feedback"], bg=theme.CARD_BG,
-                       fg=theme.TEXT, activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
-                       font=_font(10)).pack(anchor="w")
+        self._switch(s, "Озвучивать действия голосом (офлайн)", sv["voice_feedback"])
         sv["voice_wake"] = tk.BooleanVar(master=self.root, value=cur.get("voice_wake_enabled", False))
-        tk.Checkbutton(s, text="Слушать «Эй, ассистент» без кнопки (микрофон работает постоянно)", variable=sv["voice_wake"],
-                       bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
-                       font=_font(10)).pack(anchor="w")
+        self._switch(s, "Слушать «Эй, ассистент» без кнопки (микрофон работает постоянно)", sv["voice_wake"])
         tk.Label(s, text="Звук нигде не хранится. Каждая услышанная фраза (до 5 секунд) отправляется на бесплатное "
                          "распознавание Google, чтобы найти слово «ассистент»; без него фраза выбрасывается. "
                          "Включай, только если тебя это устраивает. Сказанная команда всё равно спросит подтверждение.",
@@ -1085,12 +1100,7 @@ class AppWindow:
                  wraplength=640).pack(fill="x", pady=(2, 6))
         self._field_label(s, "Язык голосовых команд")
         sv["voice_language"] = tk.StringVar(master=self.root, value=cur.get("voice_language", "ru-RU"))
-        row = tk.Frame(s, bg=theme.CARD_BG)
-        row.pack(anchor="w")
-        for value, label in (("ru-RU", "Русский"), ("uk-UA", "Українська"), ("en-US", "English")):
-            tk.Radiobutton(row, text=label, value=value, variable=sv["voice_language"], bg=theme.CARD_BG,
-                           fg=theme.TEXT, activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
-                           font=_font(10)).pack(side="left", padx=(0, 16))
+        ui_kit.Segmented(s, sv["voice_language"], [("ru-RU", "Русский"), ("uk-UA", "Українська"), ("en-US", "English")]).pack(anchor="w", pady=(0, 6))
         self._field_label(s, "Микрофон")
         sv["voice_device"] = tk.StringVar(master=self.root, value=cur.get("voice_device", ""))
         choices = [("", "Системный по умолчанию")] + [(n, n[:70]) for n in voice_input.list_input_devices()[:8]]
@@ -1108,9 +1118,7 @@ class AppWindow:
 
         s = self._section(tabs["ai"], "Локальная модель (Ollama) — необязательно")
         sv["local_enabled"] = tk.BooleanVar(master=self.root, value=cur.get("local_model_enabled", True))
-        tk.Checkbutton(s, text="Использовать для простых команд", variable=sv["local_enabled"], bg=theme.CARD_BG,
-                       fg=theme.TEXT, activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
-                       font=_font(10)).pack(anchor="w")
+        self._switch(s, "Использовать для простых команд", sv["local_enabled"])
         self._field_label(s, "Название модели")
         sv["local_name"] = tk.StringVar(master=self.root, value=cur.get("local_model_name", "qwen2.5:3b"))
         self._entry(s, sv["local_name"], 24)
@@ -1119,20 +1127,11 @@ class AppWindow:
 
         s = self._section(tabs["sys"], "Запуск")
         sv["autostart"] = tk.BooleanVar(master=self.root, value=autostart.is_enabled())
-        tk.Checkbutton(s, text="Запускать вместе с Windows (сразу в трее, без окна)", variable=sv["autostart"],
-                       bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
-                       font=_font(10)).pack(anchor="w")
+        self._switch(s, "Запускать вместе с Windows (сразу в трее, без окна)", sv["autostart"])
         _button(s, "🖥 Создать ярлыки (рабочий стол и меню Пуск)", self._make_shortcuts, "neutral",
                 small=True).pack(anchor="w", pady=(8, 0))
 
         show_tab(getattr(self, "_settings_tab", "ai"))
-
-        bar = tk.Frame(body, bg=theme.BG)
-        bar.pack(fill="x", pady=(22, 10))
-        _button(bar, "💾  Сохранить настройки", self._save_settings, "success").pack(side="left")
-        self._s_status = tk.Label(bar, text="", font=_font(10), bg=theme.BG, fg=theme.SUCCESS, anchor="w",
-                                  justify="left", wraplength=520)
-        self._s_status.pack(side="left", padx=14)
         return page
 
     # ----- вкладка Telegram -----
@@ -1152,19 +1151,14 @@ class AppWindow:
                  font=_font(10), bg=theme.CARD_BG, fg=theme.TEXT, anchor="w", justify="left",
                  wraplength=640).pack(fill="x", pady=(0, 8))
         sv["tg_enabled"] = tk.BooleanVar(master=self.root, value=bool(cur.get("telegram_enabled", False)))
-        tk.Checkbutton(s, text="Включить управление из Telegram", variable=sv["tg_enabled"], bg=theme.CARD_BG,
-                       fg=theme.TEXT, activebackground=theme.CARD_BG, selectcolor=theme.INPUT_BG,
-                       font=_font(10)).pack(anchor="w")
+        self._switch(s, "Включить управление из Telegram", sv["tg_enabled"])
         sv["tg_approve"] = tk.BooleanVar(master=self.root, value=bool(cur.get("telegram_approve_in_chat", True)))
-        tk.Checkbutton(s, text="Все вопросы и подтверждения — кнопками в Telegram (опасные действия спрашиваю дважды)",
-                       variable=sv["tg_approve"], bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG,
-                       selectcolor=theme.INPUT_BG, font=_font(10), wraplength=640, justify="left").pack(anchor="w")
+        self._switch(s, "Все вопросы и подтверждения — кнопками в Telegram (опасные действия спрашиваю дважды)", sv["tg_approve"])
         for key, cfg, label in (("tg_trusted", "telegram_trusted_auto", "Безопасные быстрые команды (открыть сайт/программу, скрин) выполнять сразу, без вопроса"),
                                 ("tg_screen", "telegram_screen_after", "После задачи присылать скриншот экрана"),
                                 ("tg_announce", "telegram_announce", "При запуске программы писать в Telegram «ассистент на связи»")):
             sv[key] = tk.BooleanVar(master=self.root, value=bool(cur.get(cfg, True)))
-            tk.Checkbutton(s, text=label, variable=sv[key], bg=theme.CARD_BG, fg=theme.TEXT, activebackground=theme.CARD_BG,
-                           selectcolor=theme.INPUT_BG, font=_font(10), wraplength=640, justify="left").pack(anchor="w")
+            self._switch(s, label, sv[key])
         has_token = bool(telegram_bot.get_token())
         self._field_label(s, "Токен бота" + (" (сохранён — оставь пустым, чтобы не менять)" if has_token else ""))
         sv["tg_token"] = tk.StringVar(master=self.root, value="")

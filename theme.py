@@ -31,14 +31,16 @@ THEMES = {
     "light": {
         "PRIMARY": "#4F46E5", "PRIMARY_DARK": "#4338CA", "ACCENT": "#9333EA",
         "SUCCESS": "#16A34A", "WARNING": "#D97706", "DANGER": "#DC2626", "NEUTRAL": "#6B7280",
-        "BG": "#FAFAFA", "INPUT_BG": "#FFFFFF", "TEXT": "#111827", "TEXT_MUTED": "#6B7280",
-        "SIDEBAR_BG": "#F1F2F7", "CARD_BG": "#FFFFFF", "BORDER": "#E2E4EC", "NAV_ACTIVE": "#E3E6FF",
+        "BG": "#F4F6FB", "INPUT_BG": "#FFFFFF", "TEXT": "#111827", "TEXT_MUTED": "#5B6475",
+        "SIDEBAR_BG": "#FFFFFF", "CARD_BG": "#FFFFFF", "BORDER": "#E2E5EE", "NAV_ACTIVE": "#E3E6FF",
+        "HOVER": "#EEF1FA", "TOGGLE_OFF": "#B8BFCE",
     },
     "dark": {
         "PRIMARY": "#818CF8", "PRIMARY_DARK": "#6366F1", "ACCENT": "#C084FC",
         "SUCCESS": "#4ADE80", "WARNING": "#FBBF24", "DANGER": "#F87171", "NEUTRAL": "#9CA3AF",
-        "BG": "#1F2126", "INPUT_BG": "#2B2E35", "TEXT": "#F3F4F6", "TEXT_MUTED": "#9CA3AF",
-        "SIDEBAR_BG": "#17191D", "CARD_BG": "#2A2D34", "BORDER": "#3B3F48", "NAV_ACTIVE": "#33376A",
+        "BG": "#0E1424", "INPUT_BG": "#0B1020", "TEXT": "#EAF0FF", "TEXT_MUTED": "#93A0BE",
+        "SIDEBAR_BG": "#0A0F1C", "CARD_BG": "#151C30", "BORDER": "#27314F", "NAV_ACTIVE": "#33376A",
+        "HOVER": "#1A2340", "TOGGLE_OFF": "#3A4568",
     },
 }
 
@@ -50,6 +52,8 @@ ACCENTS = {   # (PRIMARY, PRIMARY_DARK, NAV_ACTIVE)
              "green": ("#4ADE80", "#22C55E", "#14532D"), "pink": ("#F472B6", "#EC4899", "#831843"),
              "orange": ("#FB923C", "#F97316", "#7C2D12")},
 }
+# Заливка кнопок / выбранного пункта: белый текст на ней читается в обеих темах (контраст не ниже 4,5:1)
+FILLS = {"indigo": "#4F46E5", "blue": "#2563EB", "green": "#15803D", "pink": "#BE185D", "orange": "#C2410C"}
 ACCENT_LABELS = {"indigo": "Индиго", "blue": "Синий", "green": "Зелёный", "pink": "Розовый", "orange": "Оранжевый"}
 
 THEME_LABELS = {"light": "Светлая", "dark": "Тёмная", "system": "Как в Windows"}
@@ -82,6 +86,7 @@ def palette() -> dict:
     accent = ACCENTS[name].get(config.get("accent") or "indigo")
     if accent:
         colors["PRIMARY"], colors["PRIMARY_DARK"], colors["NAV_ACTIVE"] = accent
+    colors["FILL"] = FILLS.get(config.get("accent") or "indigo", FILLS["indigo"])
     return colors
 
 
