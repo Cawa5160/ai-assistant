@@ -28,6 +28,7 @@ import voice_input
 
 NAV = [
     ("home", "🏠", "Главная"),
+    ("chat", "💬", "Ассистент"),
     ("history", "🕘", "История"),
     ("schedule", "📅", "Расписание"),
     ("memory", "🧠", "Макросы и заметки"),
@@ -35,7 +36,7 @@ NAV = [
     ("diag", "🩺", "Проверка системы"),
 ]
 
-NAV_GLYPHS = {"home": "\uE80F", "history": "\uE81C", "schedule": "\uE787", "memory": "\uE8F1",
+NAV_GLYPHS = {"home": "\uE80F", "chat": "\uE8BD", "history": "\uE81C", "schedule": "\uE787", "memory": "\uE8F1",
               "settings": "\uE713", "diag": "\uE9D9"}     # значки Segoe Fluent / MDL2 (на Windows 10/11)
 
 EXAMPLES = [
@@ -431,6 +432,111 @@ class AppWindow:
                     banner.pack_forget()
         except tk.TclError:
             pass
+
+    # ===================== АССИСТЕНТ (ЧАТ) =====================
+
+    def _build_chat(self, parent):
+        if not hasattr(self, "_chat_turns"):
+            self._chat_turns = []        # только в памяти программы, на диск не пишется
+        self._chat_mode = tk.StringVar(master=self.root, value="ask")
+        page = tk.Frame(parent, bg=theme.BG)
+        _page_hero(page, "Ассистент",
+                   "«Спросить» — разговор с памятью (экран не виден, ничего не нажимается). «Выполнить» — команда для "
+                   "компьютера, как на главной. Переписка хранится только пока программа запущена.").pack(
+            fill="x", padx=32, pady=(26, 8))
+
+        bottom = tk.Frame(page, bg=theme.BG)
+        bottom.pack(side="bottom", fill="x", padx=32, pady=(4, 18))
+        box = ui_kit.RoundCard(bottom, outer_bg=theme.BG, pad=10)
+        box.pack(fill="x")
+        self._chat_input = tk.Text(box.body, height=3, font=_font(11), wrap="word", relief="flat", bd=0,
+                                   bg=theme.CARD_BG, fg=theme.TEXT, insertbackground=theme.TEXT,
+                                   highlightthickness=0, padx=4, pady=4)
+        self._chat_input.pack(fill="x")
+        self._chat_input.bind("<Return>", lambda e: (self._chat_send(), "break")[1])
+        self._chat_input.bind("<Shift-Return>", lambda e: None)
+        row = tk.Frame(box.body, bg=theme.CARD_BG)
+        row.pack(fill="x", pady=(6, 0))
+        ui_kit.Segmented(row, self._chat_mode, [("ask", "Спросить"), ("run", "Выполнить")]).pack(side="left")
+        _button(row, "Отправить", self._chat_send, "primary").pack(side="right")
+        _button(row, "Очистить", self._chat_clear, "neutral", small=True).pack(side="right", padx=8)
+
+        self._chat_scroll = ScrollFrame(page, theme.BG)
+        self._chat_scroll.pack(fill="both", expand=True, padx=(32, 16), pady=(4, 6))
+        return page
+
+    def _refresh_chat(self):
+        inner = self._chat_scroll.inner
+        for w in inner.winfo_children():
+            w.destroy()
+        if not self._chat_turns:
+            tk.Label(inner, text="Здесь пока пусто. Задай вопрос — например «объясни, чем отличается RAM от SSD», "
+                                 "или переключи режим на «Выполнить» и напиши команду.", font=_font(10),
+                     bg=theme.BG, fg=theme.TEXT_MUTED, anchor="w", justify="left", wraplength=640).pack(
+                fill="x", pady=12)
+        for t in self._chat_turns:
+            user = t["role"] == "user"
+            row = tk.Frame(inner, bg=theme.BG)
+            row.pack(fill="x", pady=4, padx=(0, 8))
+            bubble = tk.Label(row, text=t["text"], font=_font(10), justify="left", anchor="w", wraplength=560,
+                              bg=theme.FILL if user else theme.CARD_BG, fg="#FFFFFF" if user else theme.TEXT,
+                              padx=14, pady=10, highlightthickness=0 if user else 1,
+                              highlightbackground=theme.BORDER)
+            bubble.pack(side="right" if user else "left")
+        try:
+            self.root.update_idletasks()
+            self._chat_scroll.canvas.yview_moveto(1.0)
+        except tk.TclError:
+            pass
+
+    def _chat_clear(self):
+        self._chat_turns = []
+        self._refresh_chat()
+
+    def _chat_send(self):
+        text = self._chat_input.get("1.0", "end").strip()
+        if not text:
+            return
+        self._chat_input.delete("1.0", "end")
+        if self._chat_mode.get() == "run":
+            self._chat_turns.append({"role": "user", "text": "▶ " + text})
+            self._chat_turns.append({"role": "assistant", "text": "Запускаю команду… результат появится здесь."})
+            baseline = self._history_key()
+            self.c.submit_command(text)
+            self.root.after(2000, lambda: self._chat_poll_result(baseline, len(self._chat_turns) - 1, 0))
+        else:
+            self._chat_turns.append({"role": "user", "text": text})
+            self._chat_turns.append({"role": "assistant", "text": "…"})
+            idx = len(self._chat_turns) - 1
+            asked = [dict(t) for t in self._chat_turns[:idx] if not t["text"].startswith("▶ ")
+                     and not t["text"].startswith("Запускаю команду")]
+            self.c.chat_ask(asked, lambda answer, ok, i=idx: ui_thread.post(self._chat_set_answer, i, answer))
+        self._refresh_chat()
+
+    def _chat_set_answer(self, idx, answer):
+        if idx < len(self._chat_turns):
+            self._chat_turns[idx]["text"] = answer
+        if self._page_name == "chat":
+            self._refresh_chat()
+
+    @staticmethod
+    def _history_key():
+        items = history.get_all()
+        return (items[0].get("time"), items[0].get("command")) if items else None
+
+    def _chat_poll_result(self, baseline, idx, tries):
+        """Ждём, пока команда запишется в историю, и показываем её итог в чате (до ~5 минут)."""
+        items = history.get_all()
+        if items and self._history_key() != baseline:
+            e = items[0]
+            text = e.get("status", "") or "готово"
+            if e.get("summary"):
+                text += f"\n{e['summary']}"
+            self._chat_set_answer(idx, text)
+        elif tries < 150:
+            self.root.after(2000, lambda: self._chat_poll_result(baseline, idx, tries + 1))
+        else:
+            self._chat_set_answer(idx, "Результат не появился в истории. Посмотри вкладку «История».")
 
     # ===================== ГЛАВНАЯ =====================
 

@@ -111,5 +111,34 @@ class KeyNotInUrl(unittest.TestCase):
         self.assertNotIn("key=", ai_brain._gemini_url())
 
 
+class ChatPayload(unittest.TestCase):
+    def test_roles_and_system(self):
+        import chat
+        p = chat.build_payload([{"role": "user", "text": "привет"}, {"role": "assistant", "text": "здравствуй"},
+                                {"role": "user", "text": "как дела?"}])
+        self.assertEqual([c["role"] for c in p["contents"]], ["user", "model", "user"])
+        self.assertIn("systemInstruction", p)
+
+    def test_limits_and_last_kept(self):
+        import chat
+        turns = [{"role": "user" if i % 2 == 0 else "assistant", "text": "x" * 900} for i in range(30)] + \
+                [{"role": "user", "text": "последний вопрос"}]
+        out = chat.trim_turns(turns)
+        self.assertLessEqual(len(out), chat.MAX_TURNS)
+        self.assertEqual(out[-1]["text"], "последний вопрос")
+        self.assertLessEqual(sum(len(t["text"]) for t in out), chat.MAX_CHARS + 900)
+
+    def test_secrets_hidden(self):
+        import chat
+        text = "мой пароль: qwerty123456 запомни"
+        out = chat.trim_turns([{"role": "user", "text": text}])[0]["text"]
+        self.assertNotEqual(out, text)
+
+    def test_needs_user_question(self):
+        import chat
+        with self.assertRaises(ValueError):
+            chat.ask([{"role": "assistant", "text": "привет"}])
+
+
 if __name__ == "__main__":
     unittest.main()

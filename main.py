@@ -40,6 +40,7 @@ import keyboard
 import pystray
 from PIL import Image, ImageDraw
 
+import chat
 import config
 import gui
 import theme
@@ -800,6 +801,16 @@ class Controller:
 
     def voice_command(self):
         threading.Thread(target=on_voice_command, daemon=True).start()
+
+    def chat_ask(self, turns, on_done):
+        """Вопрос в чат «Ассистент»: ответ приходит в on_done(текст, успех) из рабочего потока."""
+        def work():
+            try:
+                on_done(chat.ask(turns), True)
+            except Exception as e:
+                log(f"Чат: ошибка ответа: {e}")
+                on_done(f"Не получилось получить ответ: {e}", False)
+        threading.Thread(target=work, daemon=True).start()
 
     def attach_file(self, path, question=""):
         threading.Thread(target=_on_attached_file, args=(path, question), daemon=True).start()
