@@ -135,8 +135,7 @@ def ask_command() -> str:
 
     entry.bind("<Return>", submit)
     entry.bind("<Escape>", lambda e: win.destroy())
-    tk.Button(win, text="➤ Выполнить", bg=theme.PRIMARY, fg="white", font=("Segoe UI", 10, "bold"),
-              relief="flat", padx=16, command=submit).pack()
+    _dialog_button(win, "Выполнить", submit, "primary", 16).pack()
     _present(win)
     entry.focus_set()
     win.wait_window()
@@ -279,8 +278,7 @@ def _show_notification(message: str):
     win = _new_window("AI Ассистент", 440, 150)
     tk.Label(win, text=message, font=theme.FONT_BODY, bg=theme.BG,
              wraplength=410, justify="left").pack(pady=18, padx=12)
-    tk.Button(win, text="OK", bg=theme.PRIMARY, fg="white", relief="flat", width=10,
-              command=win.destroy).pack()
+    _dialog_button(win, "OK", win.destroy, "primary", 10).pack()
     _present(win)
     win.after(9000, lambda: win.destroy() if _exists(win) else None)
 
@@ -304,12 +302,13 @@ def first_run_wizard() -> list:
     )
     tk.Label(win, text=instructions, justify="left", font=theme.FONT_BODY, bg=theme.BG,
              wraplength=530).pack(pady=(12, 5), padx=22, anchor="w")
-    tk.Button(win, text="🌐 Открыть aistudio.google.com", bg=theme.PRIMARY, fg="white", relief="flat",
-              font=("Segoe UI", 10, "bold"),
-              command=lambda: webbrowser.open("https://aistudio.google.com/apikey")).pack(pady=5)
+    _dialog_button(win, "Открыть aistudio.google.com", lambda: webbrowser.open("https://aistudio.google.com/apikey"),
+                   "primary", 30).pack(pady=5)
 
     keys_box = scrolledtext.ScrolledText(win, width=58, height=5, font=theme.FONT_MONO, relief="flat",
-                                         highlightthickness=1, highlightbackground=theme.BORDER)
+                                         bg=theme.INPUT_BG, fg=theme.TEXT, insertbackground=theme.TEXT,
+                                         highlightthickness=1, highlightbackground=theme.BORDER,
+                                         highlightcolor=theme.PRIMARY, padx=8, pady=6)
     keys_box.pack(pady=10, padx=22, fill="x")
 
     def submit():
@@ -319,9 +318,8 @@ def first_run_wizard() -> list:
 
     btn_frame = tk.Frame(win, bg=theme.BG)
     btn_frame.pack(pady=5)
-    tk.Button(btn_frame, text="Сохранить и продолжить", bg="#15803D", fg="white", relief="flat",
-              command=submit).pack(side="left", padx=5)
-    tk.Button(btn_frame, text="Пропустить", relief="flat", command=win.destroy).pack(side="left", padx=5)
+    _dialog_button(btn_frame, "Сохранить и продолжить", submit, "primary", 22).pack(side="left", padx=5)
+    _dialog_button(btn_frame, "Пропустить", win.destroy, "neutral", 12).pack(side="left", padx=5)
     tk.Label(win, text="Ключи можно добавить/изменить позже: Настройки в главном окне",
              font=theme.FONT_SMALL, fg=theme.TEXT_MUTED, bg=theme.BG).pack(pady=(10, 0))
 
@@ -524,10 +522,8 @@ def ask_yes_no(title: str, text: str, yes: str = "Да", no: str = "Нет") -> 
     row = tk.Frame(win, bg=theme.BG)
     row.pack(pady=16)
     bold = ("Segoe UI", 10, "bold")
-    tk.Button(row, text=yes, bg=theme.FILL, fg="white", font=bold, relief="flat", width=18,
-              command=on_yes).pack(side="left", padx=8)
-    tk.Button(row, text=no, bg=theme.TOGGLE_OFF, fg="white", font=bold, relief="flat", width=14,
-              command=win.destroy).pack(side="left", padx=8)
+    _dialog_button(row, yes, on_yes, "primary", 18).pack(side="left", padx=8)
+    _dialog_button(row, no, win.destroy, "neutral", 14).pack(side="left", padx=8)
     _present(win)
     win.wait_window()
     return result["ok"]
@@ -553,7 +549,7 @@ class VoiceWindow:
         self.level.pack()
         tk.Label(self.win, text="Скажи, что нужно сделать. Запись остановится сама, когда договоришь.",
                  font=theme.FONT_SMALL, fg=theme.TEXT_MUTED, bg=theme.BG, wraplength=380).pack(pady=(8, 4))
-        tk.Button(self.win, text="Отмена", relief="flat", width=14, command=self._cancel).pack(pady=8)
+        _dialog_button(self.win, "Отмена", self._cancel, "neutral", 14).pack(pady=8)
 
         _present(self.win)
         self.win.after(60, self._poll)
