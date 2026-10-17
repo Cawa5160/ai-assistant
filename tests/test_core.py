@@ -211,13 +211,24 @@ class Translation(unittest.TestCase):
     def test_sentences_not_half_translated(self):
         import i18n
         i18n.set_language("en")
-        self.assertEqual(i18n.t("Готово: план выполнен"), "Готово: план выполнен")   # данные из истории не трогаем
+        self.assertEqual(i18n.t("Готово: план выполнен"), "Done: plan completed")
 
     def test_dictionaries_same_keys(self):
         import lang_en, lang_uk
         self.assertTrue(set(lang_uk.TR) <= set(lang_en.TR))     # в uk нет пунктов, которых нет в en (совпадающие с русским опущены)
         self.assertTrue(all(v.strip() for v in lang_en.TR.values()))
         self.assertTrue(all(v.strip() for v in lang_uk.TR.values()))
+
+
+    def test_extended_messages_and_hint(self):
+        import i18n
+        i18n.set_language("en")
+        self.assertEqual(i18n.t("📜  История команд"), "📜  Command history")
+        self.assertIn("English", i18n.answer_hint())
+        i18n.set_language("uk")
+        self.assertIn("українською", i18n.answer_hint())
+        i18n.set_language("ru")
+        self.assertEqual(i18n.answer_hint(), "")
 
 
 if __name__ == "__main__":

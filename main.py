@@ -41,6 +41,7 @@ import pystray
 from PIL import Image, ImageDraw
 
 import chat
+import i18n
 import config
 import gui
 import theme
@@ -83,13 +84,13 @@ def notify(title: str, message: str):
     """Нативное Windows-уведомление, а если не вышло — небольшое окно. Для команды из Telegram — ещё и сообщение в чат."""
     if _is_remote():
         try:
-            telegram_bot._send(_remote.uid, f"{redact(str(title))}: {redact(str(message))}"[:1500])
+            telegram_bot._send(_remote.uid, f"{redact(str(i18n.t(title)))}: {redact(str(i18n.t(message)))}"[:1500])
             _remote.mirrored = True
             return
         except Exception as e:
             log(f"Не отправилось в Telegram: {e}")
-    if not notifications.notify(title, message):
-        gui.show_notification(message)
+    if not notifications.notify(i18n.t(title), i18n.t(message)):
+        gui.show_notification(i18n.t(message))
 
 
 def _set_busy(busy: bool, text: str = ""):
@@ -875,22 +876,22 @@ def set_tray_status(color: str):
 def setup_tray():
     global _tray_icon
     more = pystray.Menu(
-        pystray.MenuItem("📜  История команд", lambda: show_window("history")),
-        pystray.MenuItem("📅  Расписание задач", lambda: show_window("schedule")),
-        pystray.MenuItem("🩺  Проверка системы", lambda: show_window("diag")),
+        pystray.MenuItem(i18n.t("📜  История команд"), lambda: show_window("history")),
+        pystray.MenuItem(i18n.t("📅  Расписание задач"), lambda: show_window("schedule")),
+        pystray.MenuItem(i18n.t("🩺  Проверка системы"), lambda: show_window("diag")),
     )
     menu = pystray.Menu(
-        pystray.MenuItem("🪟  Открыть окно", lambda: show_window(), default=True),   # двойной клик по значку
+        pystray.MenuItem(i18n.t("🪟  Открыть окно"), lambda: show_window(), default=True),   # двойной клик по значку
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("💬  Быстрая команда", _in_thread(on_text_command)),
-        pystray.MenuItem("🎙️  Команда голосом", _in_thread(on_voice_command)),
-        pystray.MenuItem("🔁  Повторить последнюю", _in_thread(on_repeat_last)),
-        pystray.MenuItem("🛑  Остановить автопилот", _in_thread(stop_agent)),
+        pystray.MenuItem(i18n.t("💬  Быстрая команда"), _in_thread(on_text_command)),
+        pystray.MenuItem(i18n.t("🎙️  Команда голосом"), _in_thread(on_voice_command)),
+        pystray.MenuItem(i18n.t("🔁  Повторить последнюю"), _in_thread(on_repeat_last)),
+        pystray.MenuItem(i18n.t("🛑  Остановить автопилот"), _in_thread(stop_agent)),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Ещё", more),
-        pystray.MenuItem("⚙️  Настройки", lambda: show_window("settings")),
+        pystray.MenuItem(i18n.t("Ещё"), more),
+        pystray.MenuItem(i18n.t("⚙️  Настройки"), lambda: show_window("settings")),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("🚪  Выход", lambda: quit_app()),
+        pystray.MenuItem(i18n.t("🚪  Выход"), lambda: quit_app()),
     )
     _tray_icon = pystray.Icon("ai_assistant", make_tray_icon_image(COLOR_IDLE), "AI Ассистент", menu)
     return _tray_icon

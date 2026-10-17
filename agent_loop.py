@@ -22,6 +22,7 @@ computer-use агентов:
 import time
 
 import config
+import i18n
 import ai_brain
 import plan_validator
 import screen_utils
@@ -208,7 +209,7 @@ def decide(goal: str, history: list, on_wait=None, cancel=None):
     except Exception:
         notes_block = ""
     prompt = (
-        f"{AGENT_PROMPT}{notes_block}\n\nЦЕЛЬ ПОЛЬЗОВАТЕЛЯ: {goal}\n\n"
+        f"{AGENT_PROMPT}{i18n.answer_hint()}{notes_block}\n\nЦЕЛЬ ПОЛЬЗОВАТЕЛЯ: {goal}\n\n"
         f"ИСТОРИЯ ШАГОВ:\n{_history_text(history)}\n\nТекущий скриншот экрана приложен.{extra}"
     )
     payload = {
@@ -249,7 +250,7 @@ def look_and_answer(question: str, on_wait=None, cancel=None) -> str:
     shot, _ = screen_utils.take_screenshot()
     payload = {
         "contents": [{"role": "user", "parts": [
-            {"text": f"{VIEW_ONLY_PROMPT}\n\nВОПРОС / ПРОСЬБА ПОЛЬЗОВАТЕЛЯ: {question}"},
+            {"text": f"{VIEW_ONLY_PROMPT}{i18n.answer_hint()}\n\nВОПРОС / ПРОСЬБА ПОЛЬЗОВАТЕЛЯ: {question}"},
             {"inline_data": {"mime_type": "image/jpeg", "data": shot}},
         ]}],
         "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1024},

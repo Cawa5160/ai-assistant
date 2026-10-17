@@ -23,6 +23,8 @@ import time
 
 import requests
 
+import i18n
+
 import atomic_io
 from app_paths import DATA_DIR
 from logger import log
@@ -226,7 +228,7 @@ def _chunks(text: str, size: int = 3800):
 
 def _send(chat_id, text: str, keyboard: bool = False):
     try:
-        parts = list(_chunks(text))[:6]
+        parts = list(_chunks(i18n.t(text)))[:6]
         for i, part in enumerate(parts):
             extra = {"reply_markup": _KEYBOARD} if keyboard and i == len(parts) - 1 else {}
             _post_retry("sendMessage", chat_id=chat_id, text=part or "…", **extra)

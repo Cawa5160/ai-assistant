@@ -61,6 +61,12 @@ def set_language(code: str):
         _words.append((re.compile(r"(?<![А-Яа-яЁё])шаг\."), "step(s)."))
 
 
+def answer_hint() -> str:
+    """Фраза для промптов Gemini/Ollama: на каком языке писать текст для пользователя."""
+    return {"en": "\n\nIMPORTANT: write every text meant for the user (answers, summaries, messages) in English.",
+            "uk": "\n\nВАЖЛИВО: весь текст для користувача (відповіді, підсумки, повідомлення) пиши українською."}.get(_lang, "")
+
+
 def t(text):
     """Перевод строки на выбранный язык (или та же строка, если перевода нет)."""
     if _lang == "ru" or not isinstance(text, str) or not text or not CYR.search(text):

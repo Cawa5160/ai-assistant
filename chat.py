@@ -5,6 +5,7 @@
 Команды для компьютера по-прежнему выполняются обычным путём (main.process_command) — см. режим «Выполнить».
 """
 import ai_brain
+import i18n
 from privacy import redact
 
 MAX_TURNS = 10          # сколько последних реплик помним
@@ -30,7 +31,7 @@ def trim_turns(turns: list) -> list:
 
 
 def build_payload(turns: list) -> dict:
-    return {"systemInstruction": {"parts": [{"text": SYSTEM}]},
+    return {"systemInstruction": {"parts": [{"text": SYSTEM + i18n.answer_hint()}]},
             "contents": [{"role": t["role"], "parts": [{"text": t["text"]}]} for t in trim_turns(turns)],
             "generationConfig": {"temperature": 0.5, "maxOutputTokens": 1200}}
 
@@ -40,7 +41,7 @@ def ask_local(turns: list) -> str:
     import config
     import local_llm
     msgs = [{"role": "assistant" if t["role"] == "model" else "user", "text": t["text"]} for t in trim_turns(turns)]
-    return local_llm.chat(config.get("local_model_name") or "qwen2.5:3b", msgs, SYSTEM)
+    return local_llm.chat(config.get("local_model_name") or "qwen2.5:3b", msgs, SYSTEM + i18n.answer_hint())
 
 
 def ask(turns: list, cancel=None, backend: str = "gemini") -> str:
