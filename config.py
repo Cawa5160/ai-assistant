@@ -13,7 +13,7 @@ BASE_DIR = DATA_DIR  # рядом со скриптом (или рядом с .e
 SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
 LOG_FILE = os.path.join(BASE_DIR, "action_log.txt")
 
-APP_VERSION = "1.29.0"
+APP_VERSION = "1.30.0"
 SETTINGS_VERSION = 2  # растёт, когда меняются значения по умолчанию, которые нужно применить и старым установкам
 
 DEFAULTS = {
@@ -55,6 +55,7 @@ DEFAULTS = {
     "pyautogui_failsafe": True,
     "local_model_enabled": True,
     "local_model_name": "qwen2.5:3b",
+    "chat_backend": "gemini",   # чат «Ассистент»: gemini | ollama
     "voice_wake_enabled": False,   # «Эй, ассистент» без кнопки (микрофон слушает постоянно) — только по желанию
     "voice_feedback_enabled": False,
     "voice_language": "ru-RU",  # ru-RU | uk-UA | en-US

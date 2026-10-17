@@ -35,9 +35,20 @@ def build_payload(turns: list) -> dict:
             "generationConfig": {"temperature": 0.5, "maxOutputTokens": 1200}}
 
 
-def ask(turns: list, cancel=None) -> str:
-    """turns: [{'role': 'user'|'assistant', 'text': ...}], последняя реплика — вопрос пользователя."""
+def ask_local(turns: list) -> str:
+    """Ответ локальной модели (Ollama) — без интернета и без расхода лимитов Gemini."""
+    import config
+    import local_llm
+    msgs = [{"role": "assistant" if t["role"] == "model" else "user", "text": t["text"]} for t in trim_turns(turns)]
+    return local_llm.chat(config.get("local_model_name") or "qwen2.5:3b", msgs, SYSTEM)
+
+
+def ask(turns: list, cancel=None, backend: str = "gemini") -> str:
+    """turns: [{'role': 'user'|'assistant', 'text': ...}], последняя реплика — вопрос пользователя.
+    backend: 'gemini' или 'ollama'."""
     if not turns or turns[-1].get("role") != "user":
         raise ValueError("Нет вопроса.")
+    if backend == "ollama":
+        return ask_local(turns)
     data = ai_brain.generate(build_payload(turns), cancel=cancel)
     return (ai_brain.extract_text(data) or "").strip() or "ИИ ничего не ответил."

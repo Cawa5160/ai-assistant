@@ -458,6 +458,10 @@ class AppWindow:
         row = tk.Frame(box.body, bg=theme.CARD_BG)
         row.pack(fill="x", pady=(6, 0))
         ui_kit.Segmented(row, self._chat_mode, [("ask", "Спросить"), ("run", "Выполнить")]).pack(side="left")
+        self._chat_backend = tk.StringVar(master=self.root, value=config.get("chat_backend") or "gemini")
+        self._chat_backend.trace_add("write", lambda *a: config.save({"chat_backend": self._chat_backend.get()}))
+        ui_kit.Segmented(row, self._chat_backend, [("gemini", "Gemini"), ("ollama", "Локально")]).pack(
+            side="left", padx=(10, 0))
         _button(row, "Отправить", self._chat_send, "primary").pack(side="right")
         _button(row, "Очистить", self._chat_clear, "neutral", small=True).pack(side="right", padx=8)
 
@@ -1152,6 +1156,147 @@ class AppWindow:
         ui_kit.Toggle(row, var, label=text).pack(side="right", padx=(14, 0))
         tk.Frame(parent, bg=theme.BORDER, height=1).pack(fill="x")
 
+    # ----- вкладка «Локальные модели» -----
+
+    def _build_local_tab(self, tab, sv, cur):
+        s = self._section(tab, "Ваш компьютер",
+                          "Программа читает характеристики локально, в интернет они не отправляются. "
+                          "Видеопамять надёжно определяется у видеокарт NVIDIA.")
+        self._hw_label = tk.Label(s, text="Определяю…", font=_font(10), bg=theme.CARD_BG, fg=theme.TEXT,
+                                  anchor="w", justify="left", wraplength=640)
+        self._hw_label.pack(fill="x")
+        _button(s, "↻ Определить снова", lambda: self._lm_scan(), "neutral", small=True).pack(anchor="w", pady=(8, 0))
+
+        s = self._section(tab, "Ollama (локальная модель) — необязательно",
+                          "Ollama — отдельная бесплатная программа (ollama.com/download). Модель работает на вашем ПК, "
+                          "без интернета и без расхода лимитов Gemini. Используется для простых команд и в чате «Ассистент».")
+        self._ollama_label = tk.Label(s, text="Проверяю…", font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT_MUTED,
+                                      anchor="w", justify="left", wraplength=640)
+        self._ollama_label.pack(fill="x")
+        sv["local_enabled"] = tk.BooleanVar(master=self.root, value=cur.get("local_model_enabled", True))
+        self._switch(s, "Использовать для простых команд", sv["local_enabled"])
+        self._field_label(s, "Выбранная модель (имя из списка ниже или своё; после выбора нажми «Сохранить»)")
+        sv["local_name"] = tk.StringVar(master=self.root, value=cur.get("local_model_name", "qwen2.5:3b"))
+        self._entry(s, sv["local_name"], 24)
+
+        s = self._section(tab, "Подходящие модели",
+                          "Размер каждой модели проверяется в реестре Ollama, затем сравнивается с вашей памятью. "
+                          "Это совет по размеру, а не замер скорости; качество по-русски стоит проверить самому.")
+        row = tk.Frame(s, bg=theme.CARD_BG)
+        row.pack(fill="x")
+        _button(row, "🔎 Подобрать модели", lambda: self._lm_find(False), "primary", small=True).pack(side="left")
+        _button(row, "✨ Спросить у Gemini", lambda: self._lm_find(True), "neutral", small=True).pack(side="left", padx=8)
+        self._lm_status = tk.Label(s, text="", font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w",
+                                   justify="left", wraplength=640)
+        self._lm_status.pack(fill="x", pady=(8, 0))
+        self._lm_list = tk.Frame(s, bg=theme.CARD_BG)
+        self._lm_list.pack(fill="x", pady=(4, 0))
+
+    def _lm_scan(self):
+        def work():
+            import hardware
+            import local_llm
+            hw = hardware.detect()
+            running = local_llm.is_running()
+            installed = local_llm.installed_models() if running else []
+            ui_thread.post(self._lm_show_scan, hw, running, installed)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _lm_show_scan(self, hw, running, installed):
+        self._hw = hw
+        self._lm_installed = {m["name"] for m in installed}
+        gpus = "; ".join(f"{g['name']}" + (f" — {g['vram_gb']} ГБ видеопамяти" if g.get("vram_gb") else " — видеопамять неизвестна")
+                         for g in hw.get("gpus", [])) or "видеокарта не определена"
+        text = (f"Оперативная память: {hw.get('ram_gb') or '?'} ГБ\nСвободно на диске: {hw.get('disk_free_gb') or '?'} ГБ\n"
+                f"Процессор: {hw.get('cpu') or '?'} ({hw.get('cores')} потоков)\nВидеокарта: {gpus}")
+        try:
+            self._hw_label.config(text=text)
+            if running:
+                names = ", ".join(f"{m['name']} ({m['size_gb']} ГБ)" for m in installed) or "моделей пока нет"
+                self._ollama_label.config(text=f"● Ollama запущена. Скачано: {names}", fg=theme.SUCCESS)
+            else:
+                self._ollama_label.config(text="● Ollama не найдена или не запущена. Установи с ollama.com/download "
+                                               "и запусти — программа подхватит сама.", fg=theme.WARNING)
+        except tk.TclError:
+            pass
+
+    def _lm_find(self, use_gemini):
+        try:
+            self._lm_status.config(text="Ищу и проверяю модели в реестре Ollama…", fg=theme.TEXT_MUTED)
+        except tk.TclError:
+            return
+
+        def work():
+            import hardware
+            import local_llm
+            from concurrent.futures import ThreadPoolExecutor
+            hw = getattr(self, "_hw", None) or hardware.detect()
+            notes = dict(local_llm.CANDIDATES)
+            names = [n for n, _ in local_llm.CANDIDATES]
+            extra_error = ""
+            if use_gemini:
+                try:
+                    for n in local_llm.suggest_with_gemini(hw):
+                        if n not in names:
+                            names.append(n)
+                            notes[n] = "предложено Gemini, проверено в реестре"
+                except Exception as e:
+                    extra_error = f" (Gemini не ответил: {e})"
+            with ThreadPoolExecutor(max_workers=6) as pool:
+                found = list(pool.map(local_llm.registry_size_gb, names))
+            sizes = {n: sz for n, sz in zip(names, found) if sz}
+            offline = not sizes
+            if offline:      # реестр недоступен — показываем встроенный список без размеров
+                sizes = {n: None for n in names[:len(local_llm.CANDIDATES)]}
+            rows = local_llm.recommend(hw, sizes, notes)
+            ui_thread.post(self._lm_show_rows, rows, offline, extra_error)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _lm_show_rows(self, rows, offline, extra_error):
+        try:
+            for w in self._lm_list.winfo_children():
+                w.destroy()
+            if offline:
+                self._lm_status.config(text="Реестр Ollama недоступен (нет интернета?) — показываю встроенный список "
+                                            "без размеров." + extra_error, fg=theme.WARNING)
+            else:
+                self._lm_status.config(text="Готово. Сверху — то, что целиком влезет в видеопамять." + extra_error,
+                                       fg=theme.TEXT_MUTED)
+        except tk.TclError:
+            return
+        verdict = {"gpu": ("целиком в видеопамяти — быстро", theme.SUCCESS),
+                   "cpu": ("только в оперативной памяти — медленно", theme.WARNING),
+                   "no": ("не потянет этот ПК", theme.DANGER),
+                   "?": ("размер неизвестен", theme.TEXT_MUTED)}
+        for r in rows:
+            text, color = verdict[r["fit"]]
+            row = tk.Frame(self._lm_list, bg=theme.CARD_BG)
+            row.pack(fill="x", pady=5)
+            info = tk.Frame(row, bg=theme.CARD_BG)
+            info.pack(side="left", fill="x", expand=True)
+            have = "  ✓ скачана" if r["name"] in getattr(self, "_lm_installed", set()) else ""
+            size = f" · {r['size_gb']} ГБ" if r["size_gb"] else ""
+            tk.Label(info, text=r["name"] + size + have, font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
+                     anchor="w").pack(fill="x")
+            tk.Label(info, text=text + (f" · {r['note']}" if r["note"] else ""), font=_font(9), bg=theme.CARD_BG,
+                     fg=color, anchor="w", justify="left", wraplength=420).pack(fill="x")
+            _button(row, "Выбрать", lambda n=r["name"]: self._lm_choose(n), "neutral", small=True).pack(side="right")
+            _button(row, "Копировать команду", lambda n=r["name"]: self._lm_copy(n), "neutral",
+                    small=True).pack(side="right", padx=6)
+
+    def _lm_choose(self, name):
+        self._sv["local_name"].set(name)
+        self._lm_status.config(text=f"Выбрано: {name}. Нажми «Сохранить» внизу.", fg=theme.TEXT_MUTED)
+
+    def _lm_copy(self, name):
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(f"ollama pull {name}")
+            self._lm_status.config(text=f"Скопировано: ollama pull {name} — вставь в командную строку.",
+                                   fg=theme.TEXT_MUTED)
+        except tk.TclError:
+            pass
+
     def _field_label(self, parent, text):
         tk.Label(parent, text=text, font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
                  anchor="w", justify="left", wraplength=640).pack(fill="x", pady=(6, 2))
@@ -1208,7 +1353,7 @@ class AppWindow:
         sv = self._sv = {}
 
         # ---- разделы настроек (слева) ----
-        tab_defs = [("ai", "ИИ и ключи"), ("look", "Внешний вид"), ("ctrl", "Управление"),
+        tab_defs = [("ai", "ИИ и ключи"), ("local", "Локальные модели"), ("look", "Внешний вид"), ("ctrl", "Управление"),
                     ("voice", "Голос"), ("tg", "Telegram"), ("sys", "Запуск")]
         holder = tk.Frame(body, bg=theme.BG)
         holder.pack(fill="x")
@@ -1221,6 +1366,9 @@ class AppWindow:
             for k, btn in tab_buttons.items():
                 btn.set_active(k == key)
             self._settings_tab = key
+            if key == "local" and not getattr(self, "_lm_scanned", False):
+                self._lm_scanned = True
+                self._lm_scan()
             try:
                 scroll.canvas.yview_moveto(0)
             except Exception:
@@ -1316,12 +1464,7 @@ class AppWindow:
                                justify="left", wraplength=640)
         self._s_mic.pack(fill="x", pady=(6, 0))
 
-        s = self._section(tabs["ai"], "Локальная модель (Ollama) — необязательно")
-        sv["local_enabled"] = tk.BooleanVar(master=self.root, value=cur.get("local_model_enabled", True))
-        self._switch(s, "Использовать для простых команд", sv["local_enabled"])
-        self._field_label(s, "Название модели")
-        sv["local_name"] = tk.StringVar(master=self.root, value=cur.get("local_model_name", "qwen2.5:3b"))
-        self._entry(s, sv["local_name"], 24)
+        self._build_local_tab(tabs["local"], sv, cur)
 
         self._build_telegram_tab(tabs["tg"], sv, cur)
 

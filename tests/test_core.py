@@ -140,5 +140,48 @@ class ChatPayload(unittest.TestCase):
             chat.ask([{"role": "assistant", "text": "привет"}])
 
 
+class LocalModels(unittest.TestCase):
+    def test_nvidia_parse(self):
+        import hardware
+        g = hardware.parse_nvidia_smi("NVIDIA GeForce RTX 4050 Laptop GPU, 6141\n")
+        self.assertEqual(g[0]["name"], "NVIDIA GeForce RTX 4050 Laptop GPU")
+        self.assertAlmostEqual(g[0]["vram_gb"], 6.0, places=1)
+        self.assertEqual(hardware.parse_nvidia_smi("мусор"), [])
+
+    def test_fit_rules(self):
+        import local_llm as L
+        self.assertEqual(L.fit(2.5, 6.0, 16), "gpu")
+        self.assertEqual(L.fit(5.2, 6.0, 16), "cpu")          # 5.2+1.2 > 6, но в оперативную влезает
+        self.assertEqual(L.fit(20, 6.0, 16), "no")
+        self.assertEqual(L.fit(None, 6.0, 16), "?")
+        self.assertEqual(L.fit(3, None, 16), "cpu")           # видеопамять неизвестна
+
+    def test_parse_names_rejects_garbage(self):
+        import local_llm as L
+        out = L.parse_names('Вот: ["Qwen3:4b", "gemma3:4b", "rm -rf /", "../x", "qwen3:4b"]')
+        self.assertEqual(out, ["qwen3:4b", "gemma3:4b"])
+        self.assertEqual(L.parse_names("без списка"), [])
+
+    def test_recommend_order(self):
+        import local_llm as L
+        rows = L.recommend({"vram_gb": 6.0, "ram_gb": 16}, {"big": 20.0, "a": 2.0, "b": 4.5, "c": 5.5})
+        self.assertEqual([r["name"] for r in rows], ["b", "a", "c", "big"])
+
+    def test_registry_rejects_bad_name(self):
+        import local_llm as L
+        self.assertIsNone(L.registry_size_gb("../../etc"))
+
+    def test_ask_local_maps_roles(self):
+        import chat, local_llm
+        seen = {}
+        orig = local_llm.chat
+        local_llm.chat = lambda model, turns, system="": seen.update(t=turns) or "ок"
+        try:
+            chat.ask_local([{"role": "user", "text": "а"}, {"role": "assistant", "text": "б"}, {"role": "user", "text": "в"}])
+        finally:
+            local_llm.chat = orig
+        self.assertEqual([t["role"] for t in seen["t"]], ["user", "assistant", "user"])
+
+
 if __name__ == "__main__":
     unittest.main()

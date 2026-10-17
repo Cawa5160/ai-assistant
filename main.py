@@ -803,13 +803,26 @@ class Controller:
         threading.Thread(target=on_voice_command, daemon=True).start()
 
     def chat_ask(self, turns, on_done):
-        """Вопрос в чат «Ассистент»: ответ приходит в on_done(текст, успех) из рабочего потока."""
+        """Вопрос в чат «Ассистент»: ответ приходит в on_done(текст, успех) из рабочего потока.
+        Если выбрана локальная модель — отвечает она; если Gemini недоступен, а Ollama запущена — отвечает Ollama."""
         def work():
+            backend = config.get("chat_backend") or "gemini"
             try:
-                on_done(chat.ask(turns), True)
+                on_done(chat.ask(turns, backend=backend), True)
+                return
             except Exception as e:
-                log(f"Чат: ошибка ответа: {e}")
-                on_done(f"Не получилось получить ответ: {e}", False)
+                log(f"Чат: ошибка ответа ({backend}): {e}")
+                err = e
+            if backend == "gemini":
+                try:
+                    import local_llm
+                    if local_llm.is_running():
+                        answer = chat.ask_local(turns)
+                        on_done("(Gemini сейчас недоступен — отвечает локальная модель)\n" + answer, True)
+                        return
+                except Exception as e2:
+                    log(f"Чат: запасная локальная модель тоже не ответила: {e2}")
+            on_done(f"Не получилось получить ответ: {err}", False)
         threading.Thread(target=work, daemon=True).start()
 
     def attach_file(self, path, question=""):

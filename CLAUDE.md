@@ -17,10 +17,11 @@ Tkinter-ассистент: пишешь/говоришь команду → Gem
 - Новое оформление в стиле концепта ChatGPT на чистом Tkinter: `ui_kit.py` (RoundCard, Toggle, Segmented, Swatches, NavItem, Chip, style_ttk), палитра и `FILLS` в `theme.py`.
 - Этапы 1–5 сделаны (настройки/меню, главная, история/расписание, проверка/диалоги, установщик). Значки меню — Segoe Fluent Icons (коды не проверены на ПК).
 - Картинки интерфейса на сервере: `xvfb-run` + заглушки модулей + `import -window root`.
-- Страница «Ассистент» (v1.29.0): `chat.py` + `_build_chat` в app_window; переписка только в памяти, ask через `Controller.chat_ask`.
+- Страница «Ассистент» (v1.29.0): `chat.py` + `_build_chat` в app_window; переписка только в памяти, ask через `Controller.chat_ask` (gemini|ollama, запасной ответ локально).
+- Локальные модели (v1.30.0): `hardware.py` (железо), `local_llm.py` (Ollama, реестр, подбор), вкладка Настройки → «Локальные модели». Адрес реестра `registry.ollama.ai` и вывод nvidia-smi не проверены на ПК пользователя.
 
 ## Как выпускать версию
-1. Править код; `python -m unittest discover -s tests` (25 тестов, Windows не нужен).
+1. Править код; `python -m unittest discover -s tests` (31 тест, Windows не нужен).
 2. Поднять версию в `config.py` (`APP_VERSION`) и `tools/build_installer.py` (`APP_VERSION_LABEL`), записать в `CHANGELOG.md`.
 3. `python tools/build_installer.py` → `python tools/verify_installer.py`.
 4. Коммит с строками Co-Authored-By/Claude-Session, push, отправить `.bat` пользователю.
