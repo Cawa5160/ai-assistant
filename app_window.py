@@ -20,6 +20,7 @@ from PIL import Image, ImageTk
 
 import config
 import history
+import i18n
 import scheduler
 import theme
 import ui_kit
@@ -234,6 +235,8 @@ class ScrollFrame(tk.Frame):
 class AppWindow:
     def __init__(self, controller):
         self.c = controller
+        i18n.load_language()
+        i18n.install()
         self.root = tk.Tk()
         self.root.withdraw()                 # не мигаем окном, если запуск в фоне
         # Мост "рабочие потоки -> интерфейс" включаем СРАЗУ: уже при построении страниц запускаются
@@ -326,6 +329,7 @@ class AppWindow:
 
     def _build(self):
         theme.style_window(self.root)
+        self.root.title("AI Ассистент")
         ui_kit.style_ttk(self.root)
         self._pages = {}
         self._shell = tk.Frame(self.root, bg=theme.BG)
@@ -896,9 +900,9 @@ class AppWindow:
 
         tk.Label(form, text="Условие запуска", font=_font(10, True), bg=theme.CARD_BG, fg=theme.TEXT,
                  anchor="w").pack(fill="x")
-        self._sch_cond = tk.StringVar(master=self.root, value=scheduler.CONDITIONS[""])
+        self._sch_cond = tk.StringVar(master=self.root, value=i18n.t(scheduler.CONDITIONS[""]))
         from tkinter import ttk
-        ttk.Combobox(form, textvariable=self._sch_cond, values=list(scheduler.CONDITIONS.values()), state="readonly",
+        ttk.Combobox(form, textvariable=self._sch_cond, values=[i18n.t(v) for v in scheduler.CONDITIONS.values()], state="readonly",
                      width=52).pack(anchor="w", pady=(3, 2))
         tk.Label(form, text=f"Если условие не выполнено в назначенное время, подожду до {scheduler.WAIT_MIN} минут.",
                  font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w").pack(fill="x", pady=(0, 10))
@@ -956,7 +960,7 @@ class AppWindow:
                      fg=theme.TEXT if enabled else theme.TEXT_MUTED, anchor="w", justify="left",
                      wraplength=380).pack(fill="x")
             sub = ("Один раз · " if t.get("once") else "") + _days_text(t.get("days", [])) + \
-                  (f" · {scheduler.CONDITIONS.get(t['condition'], t['condition'])}" if t.get("condition") else "") + \
+                  (f" · {i18n.t(scheduler.CONDITIONS.get(t['condition'], t['condition']))}" if t.get("condition") else "") + \
                   ("" if enabled else " · выключено")
             tk.Label(info, text=sub, font=_font(9), bg=theme.CARD_BG, fg=theme.TEXT_MUTED, anchor="w",
                      justify="left", wraplength=380).pack(fill="x")
@@ -986,7 +990,7 @@ class AppWindow:
         else:
             self._sch_error.config(text="")
             label = self._sch_cond.get()
-            cond = next((k for k, v in scheduler.CONDITIONS.items() if v == label), "")
+            cond = next((k for k, v in scheduler.CONDITIONS.items() if label in (v, i18n.t(v))), "")
             scheduler.add_task(command, days, when, condition=cond)
             self._sch_cmd.delete(0, "end")
             self._refresh_schedule()
@@ -1409,6 +1413,9 @@ class AppWindow:
         sv["theme"] = tk.StringVar(master=self.root, value=cur.get("theme", "light"))
         self._field_label(s, "Тема оформления (применится после «Сохранить настройки»)")
         ui_kit.Segmented(s, sv["theme"], list(theme.THEME_LABELS.items())).pack(anchor="w", pady=(0, 6))
+        self._field_label(s, "Language / Мова / Язык интерфейса (применится после «Сохранить настройки»)")
+        sv["ui_language"] = tk.StringVar(master=self.root, value=cur.get("ui_language", "ru"))
+        ui_kit.Segmented(s, sv["ui_language"], list(i18n.LANGS.items())).pack(anchor="w", pady=(0, 6))
         self._field_label(s, "Акцентный цвет")
         sv["accent"] = tk.StringVar(master=self.root, value=cur.get("accent", "indigo"))
         ui_kit.Swatches(s, sv["accent"], theme.FILLS).pack(anchor="w", pady=(2, 2))
@@ -1712,6 +1719,7 @@ class AppWindow:
             "gemini_api_keys": self._keys_from_box(),
             "model": sv["model"].get().strip() or "gemini-3.5-flash",
             "theme": sv["theme"].get(),
+            "ui_language": sv["ui_language"].get(),
             "hotkey_open_window": sv["hotkey"].get().strip() or "ctrl+shift+a",
             "allowed_folders": [l.strip() for l in self._s_folders.get("1.0", "end").splitlines() if l.strip()],
             "voice_feedback_enabled": sv["voice_feedback"].get(),
@@ -1744,7 +1752,7 @@ class AppWindow:
         values["voice_device"] = sv["voice_device"].get()
         values["hotkey_voice"] = sv["hotkey_voice"].get().strip()
         values["hotkey_stop"] = sv["hotkey_stop"].get().strip()
-        old_theme = (config.get("theme"), config.get("accent"))
+        old_theme = (config.get("theme"), config.get("accent"), config.get("ui_language"))
         try:
             self.c.save_settings(values)
         except Exception as e:
@@ -1752,7 +1760,8 @@ class AppWindow:
             return
         if hasattr(self, "_view_only_var"):
             self._view_only_var.set(bool(values.get("view_only")))
-        if (values["theme"], values["accent"]) != old_theme:
+        if (values["theme"], values["accent"], values["ui_language"]) != old_theme:
+            i18n.set_language(values["ui_language"])
             self.rebuild("settings")
         self._show_status("✓ Сохранено", True)
 

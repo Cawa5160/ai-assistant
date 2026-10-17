@@ -183,5 +183,42 @@ class LocalModels(unittest.TestCase):
         self.assertEqual([t["role"] for t in seen["t"]], ["user", "assistant", "user"])
 
 
+class Translation(unittest.TestCase):
+    def tearDown(self):
+        import i18n
+        i18n.set_language("ru")
+
+    def test_russian_unchanged(self):
+        import i18n
+        i18n.set_language("ru")
+        self.assertEqual(i18n.t("Настройки"), "Настройки")
+
+    def test_exact_and_fallback(self):
+        import i18n
+        i18n.set_language("en")
+        self.assertEqual(i18n.t("Настройки"), "Settings")
+        self.assertEqual(i18n.t("Совсем неизвестная фраза"), "Совсем неизвестная фраза")
+        self.assertEqual(i18n.t("abc"), "abc")
+
+    def test_fragments_and_days(self):
+        import i18n
+        i18n.set_language("en")
+        self.assertEqual(i18n.t("Оперативная память: 8 ГБ"), "RAM: 8 GB")
+        self.assertEqual(i18n.t("Пн, Ср"), "Mon, Wed")
+        i18n.set_language("uk")
+        self.assertEqual(i18n.t("Вс"), "Нд")
+
+    def test_sentences_not_half_translated(self):
+        import i18n
+        i18n.set_language("en")
+        self.assertEqual(i18n.t("Готово: план выполнен"), "Готово: план выполнен")   # данные из истории не трогаем
+
+    def test_dictionaries_same_keys(self):
+        import lang_en, lang_uk
+        self.assertTrue(set(lang_uk.TR) <= set(lang_en.TR))     # в uk нет пунктов, которых нет в en (совпадающие с русским опущены)
+        self.assertTrue(all(v.strip() for v in lang_en.TR.values()))
+        self.assertTrue(all(v.strip() for v in lang_uk.TR.values()))
+
+
 if __name__ == "__main__":
     unittest.main()

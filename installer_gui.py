@@ -82,6 +82,18 @@ class InstallerApp:
             pass
 
     def __init__(self):
+        try:
+            import i18n
+            if os.path.exists(os.path.join(BASE_DIR, "lang_en.py")):
+                try:
+                    import config
+                    saved = config.load().get("ui_language") if os.path.exists(config.SETTINGS_PATH) else None
+                except Exception:
+                    saved = None
+                i18n.set_language(saved or i18n.detect_system_language())
+                i18n.install()
+        except Exception:
+            pass
         self.root = tk.Tk()
         self.root.title("AI Ассистент — установка")
         self.root.geometry("760x500")

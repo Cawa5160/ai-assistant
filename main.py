@@ -706,6 +706,7 @@ def apply_settings(values: dict):
         "model": values["model"],
         "theme": values["theme"],
         "accent": values.get("accent", "indigo"),
+        "ui_language": values.get("ui_language", "ru"),
         "view_only": bool(values.get("view_only", False)),
         "use_fallback_models": bool(values.get("use_fallback_models", True)),
         "fallback_models": values.get("fallback_models", ["gemini-2.5-flash", "gemini-2.5-flash-lite"]),
