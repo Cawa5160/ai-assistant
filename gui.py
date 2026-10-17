@@ -429,8 +429,7 @@ class ExecutionProgressWindow:
         self.status_label = tk.Label(self.win, text="Выполняется...", font=theme.FONT_BODY, bg=theme.BG,
                                      wraplength=520)
         self.status_label.pack(pady=(10, 5))
-        self.stop_btn = tk.Button(self.win, text="🛑 Остановить", bg="#B91C1C", fg="white", relief="flat",
-                                  font=("Segoe UI", 10, "bold"), command=self._on_stop)
+        self.stop_btn = _dialog_button(self.win, "Остановить", self._on_stop, "primary", 18)
         self.stop_btn.pack(pady=10)
 
         _present(self.win)
@@ -477,7 +476,7 @@ class ExecutionProgressWindow:
                 else:
                     self._finished = True
                     self.status_label.config(text=item[1])
-                    self.stop_btn.config(text="Закрыть", bg=theme.NEUTRAL, command=self.win.destroy)
+                    self.stop_btn.config(text="Закрыть", bg=theme.TOGGLE_OFF, activebackground=theme.TOGGLE_OFF, command=self.win.destroy)
         except queue.Empty:
             pass
         self.win.after(100, self._poll)
@@ -613,7 +612,7 @@ class AgentBar:
             self.win.attributes("-alpha", 0.95)
         except Exception:
             pass
-        self.win.configure(bg=theme.PRIMARY)
+        self.win.configure(bg=theme.FILL)
         width, height = 540, 44
         try:
             x = max(0, (self.win.winfo_screenwidth() - width) // 2)
@@ -622,15 +621,15 @@ class AgentBar:
             self.win.geometry(f"{width}x{height}")
 
         bold = ("Segoe UI", 10, "bold")
-        self.label = tk.Label(self.win, text="🤖 Автопилот запускается…", bg=theme.PRIMARY, fg="white",
+        self.label = tk.Label(self.win, text="🤖 Автопилот запускается…", bg=theme.FILL, fg="white",
                               font=bold, anchor="w", padx=12)
         self.label.pack(side="left", fill="both", expand=True)
-        tk.Button(self.win, text="🛑 Стоп", bg="#B91C1C", fg="white", relief="flat", font=bold,
+        tk.Button(self.win, text="🛑 Стоп", bg="#B91C1C", fg="white", relief="flat", highlightthickness=0, bd=0, font=bold,
                   command=owner._on_stop).pack(side="right", fill="y")
-        self.pause_btn = tk.Button(self.win, text="⏸ Пауза", bg=theme.PRIMARY_DARK, fg="white", relief="flat",
+        self.pause_btn = tk.Button(self.win, text="⏸ Пауза", bg=theme.TOGGLE_OFF, fg="white", relief="flat", highlightthickness=0, bd=0,
                                    font=bold, command=owner.toggle_pause)
         self.pause_btn.pack(side="right", fill="y")
-        tk.Button(self.win, text="📋 Журнал", bg=theme.PRIMARY_DARK, fg="white", relief="flat", font=bold,
+        tk.Button(self.win, text="📋 Журнал", bg=theme.TOGGLE_OFF, fg="white", relief="flat", highlightthickness=0, bd=0, font=bold,
                   command=owner.toggle_log).pack(side="right", fill="y")
 
         self._drag = (0, 0)
@@ -686,7 +685,9 @@ class AgentWindow:
                                       font=theme.FONT_BODY, fg=theme.TEXT_MUTED, bg=theme.BG)
         self.preview_label.pack(padx=12, pady=(6, 0))
         self._preview_photo = None
-        self.log_box = scrolledtext.ScrolledText(self.win, width=78, height=12, font=theme.FONT_MONO, wrap="word")
+        self.log_box = scrolledtext.ScrolledText(self.win, width=78, height=12, font=theme.FONT_MONO, wrap="word", bg=theme.INPUT_BG, fg=theme.TEXT,
+                                                 insertbackground=theme.TEXT, relief="flat", highlightthickness=1,
+                                                 highlightbackground=theme.BORDER, padx=8, pady=6)
         self.log_box.pack(padx=12, pady=8, fill="both", expand=True)
         self.log_box.config(state="disabled")
 
@@ -703,10 +704,10 @@ class AgentWindow:
         self.status_label = tk.Label(self.win, text=f"Работаю… (не больше {max_steps} шагов)",
                                      font=theme.FONT_BODY, bg=theme.BG)
         self.status_label.pack(pady=(4, 2))
-        self.stop_btn = tk.Button(self.win, text="🛑 Остановить", bg="#B91C1C", fg="white", relief="flat",
+        self.stop_btn = tk.Button(self.win, text="🛑 Остановить", bg="#B91C1C", fg="white", relief="flat", highlightthickness=0, bd=0,
                                   font=bold, command=self._on_stop)
         self.stop_btn.pack(pady=(4, 6))
-        tk.Button(self.win, text="📋 Копировать журнал", bg=theme.TOGGLE_OFF, fg="white", relief="flat",
+        tk.Button(self.win, text="📋 Копировать журнал", bg=theme.TOGGLE_OFF, fg="white", relief="flat", highlightthickness=0, bd=0,
                   font=("Segoe UI", 9), command=self._copy_log).pack(pady=(0, 12))
 
         exclude_from_capture(self.win)
@@ -833,7 +834,7 @@ class AgentWindow:
                     self._finished = True
                     self._append(f"\n{'✅' if ok else '⛔'} {message}\n")
                     self.status_label.config(text="Готово." if ok else "Остановлено.")
-                    self.stop_btn.config(text="Закрыть", bg=theme.NEUTRAL, command=self._on_close)
+                    self.stop_btn.config(text="Закрыть", bg=theme.TOGGLE_OFF, activebackground=theme.TOGGLE_OFF, command=self._on_close)
                     self.bar.close()
                     self._show_log(topmost=True)  # показываем итог и оставляем, пока сам не закроешь
         except queue.Empty:
@@ -866,7 +867,7 @@ class ThinkingWindow:
         self.label = tk.Label(self.win, text=text, font=theme.FONT_BODY, bg=theme.BG, fg=theme.TEXT,
                               wraplength=360, justify="left", anchor="w")
         self.label.pack(fill="x", padx=18, pady=(10, 4))
-        tk.Button(self.win, text="🛑 Остановить", bg="#B91C1C", fg="white", relief="flat",
+        tk.Button(self.win, text="🛑 Остановить", bg="#B91C1C", fg="white", relief="flat", highlightthickness=0, bd=0,
                   font=("Segoe UI", 10, "bold"), width=18, command=self._stop).pack(pady=6)
 
     def _stop(self):
