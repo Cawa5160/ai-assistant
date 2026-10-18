@@ -440,8 +440,10 @@ class AppWindow:
     # ===================== АССИСТЕНТ (ЧАТ) =====================
 
     def _build_chat(self, parent):
-        if not hasattr(self, "_chat_turns"):
-            self._chat_turns = []        # только в памяти программы, на диск не пишется
+        if not hasattr(self, "_chat_store"):
+            # Отдельная переписка для каждой модели (Gemini / локальная) — только в памяти, на диск не пишется
+            self._chat_store = {"gemini": [], "ollama": []}
+            self._chat_turns = self._chat_store.get(config.get("chat_backend") or "gemini", self._chat_store["gemini"])
         self._chat_mode = tk.StringVar(master=self.root, value="ask")
         page = tk.Frame(parent, bg=theme.BG)
         _page_hero(page, "Ассистент",
@@ -463,7 +465,7 @@ class AppWindow:
         row.pack(fill="x", pady=(6, 0))
         ui_kit.Segmented(row, self._chat_mode, [("ask", "Спросить"), ("run", "Выполнить")]).pack(side="left")
         self._chat_backend = tk.StringVar(master=self.root, value=config.get("chat_backend") or "gemini")
-        self._chat_backend.trace_add("write", lambda *a: config.save({"chat_backend": self._chat_backend.get()}))
+        self._chat_backend.trace_add("write", lambda *a: self._chat_switch_backend(self._chat_backend.get()))
         ui_kit.Segmented(row, self._chat_backend, [("gemini", "Gemini"), ("ollama", "Локально")]).pack(
             side="left", padx=(10, 0))
         _button(row, "Отправить", self._chat_send, "primary").pack(side="right")
@@ -497,8 +499,14 @@ class AppWindow:
         except tk.TclError:
             pass
 
+    def _chat_switch_backend(self, name):
+        config.save({"chat_backend": name})
+        self._chat_turns = self._chat_store.setdefault(name, [])
+        if self._page_name == "chat":
+            self._refresh_chat()
+
     def _chat_clear(self):
-        self._chat_turns = []
+        self._chat_turns.clear()           # очищается переписка только текущей модели
         self._refresh_chat()
 
     def _chat_send(self):
@@ -511,14 +519,15 @@ class AppWindow:
             self._chat_turns.append({"role": "assistant", "text": "Запускаю команду… результат появится здесь."})
             baseline = self._history_key()
             self.c.submit_command(text)
-            self.root.after(2000, lambda: self._chat_poll_result(baseline, len(self._chat_turns) - 1, 0))
+            lst = self._chat_turns
+            self.root.after(2000, lambda: self._chat_poll_result(baseline, len(lst) - 1, 0, lst))
         else:
             self._chat_turns.append({"role": "user", "text": text})
             self._chat_turns.append({"role": "assistant", "text": "⏳ Думаю… (локальная модель при первом вопросе загружается — до минуты)" if self._chat_backend_is_local() else "…"})
             idx = len(self._chat_turns) - 1
             asked = [dict(t) for t in self._chat_turns[:idx] if not t["text"].startswith("▶ ")
                      and not t["text"].startswith("Запускаю команду")]
-            self.c.chat_ask(asked, lambda answer, ok, i=idx: ui_thread.post(self._chat_set_answer, i, answer))
+            self.c.chat_ask(asked, lambda answer, ok, i=idx, lst=self._chat_turns: ui_thread.post(self._chat_set_answer, i, answer, lst))
         self._refresh_chat()
 
     def _chat_backend_is_local(self):
@@ -527,9 +536,10 @@ class AppWindow:
         except Exception:
             return False
 
-    def _chat_set_answer(self, idx, answer):
-        if idx < len(self._chat_turns):
-            self._chat_turns[idx]["text"] = answer
+    def _chat_set_answer(self, idx, answer, turns=None):
+        turns = self._chat_turns if turns is None else turns      # ответ попадает в переписку той модели, которой задан вопрос
+        if idx < len(turns):
+            turns[idx]["text"] = answer
         if self._page_name == "chat":
             self._refresh_chat()
 
@@ -538,7 +548,7 @@ class AppWindow:
         items = history.get_all()
         return (items[0].get("time"), items[0].get("command")) if items else None
 
-    def _chat_poll_result(self, baseline, idx, tries):
+    def _chat_poll_result(self, baseline, idx, tries, turns=None):
         """Ждём, пока команда запишется в историю, и показываем её итог в чате (до ~5 минут)."""
         items = history.get_all()
         if items and self._history_key() != baseline:
@@ -546,11 +556,11 @@ class AppWindow:
             text = e.get("status", "") or "готово"
             if e.get("summary"):
                 text += f"\n{e['summary']}"
-            self._chat_set_answer(idx, text)
+            self._chat_set_answer(idx, text, turns)
         elif tries < 150:
-            self.root.after(2000, lambda: self._chat_poll_result(baseline, idx, tries + 1))
+            self.root.after(2000, lambda: self._chat_poll_result(baseline, idx, tries + 1, turns))
         else:
-            self._chat_set_answer(idx, "Результат не появился в истории. Посмотри вкладку «История».")
+            self._chat_set_answer(idx, "Результат не появился в истории. Посмотри вкладку «История».", turns)
 
     # ===================== ГЛАВНАЯ =====================
 

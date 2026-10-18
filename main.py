@@ -93,6 +93,19 @@ def notify(title: str, message: str):
         gui.show_notification(i18n.t(message))
 
 
+def alarm_notify(title: str, message: str):
+    """Сигнал таймера/напоминания: уведомление + заметное окно + голос (тост Windows может быть скрыт режимом «Не беспокоить»)."""
+    notify(title, message)
+    try:
+        gui.show_notification(f"{i18n.t(title)}\n{i18n.t(message)}")
+    except Exception as e:
+        log(f"Окно сигнала не открылось: {e}")
+    try:
+        voice_output.speak(i18n.t(message))
+    except Exception:
+        pass
+
+
 def _set_busy(busy: bool, text: str = ""):
     if _app is not None:
         ui_thread.post(_app.set_busy, busy, text)
@@ -344,8 +357,11 @@ def _run_agent_visible(user_command: str, on_wait) -> str:
     )
     max_steps = int(config.get("agent_max_steps"))
 
-    chat_ok = _approve_in_chat(f"Цель: {user_command}\nАвтопилот сам будет смотреть на экран и действовать (до {max_steps} шагов). "
-                               "Каждый опасный шаг спрошу отдельно здесь же.\n\nНачнёт так:\n" + "\n".join(steps_text),
+    if max_steps < 1000:
+        intro = f"Цель: {user_command}\nАвтопилот сам будет смотреть на экран и действовать (до {max_steps} шагов). "
+    else:
+        intro = f"Цель: {user_command}\nАвтопилот сам будет смотреть на экран и действовать без ограничения числа шагов. "
+    chat_ok = _approve_in_chat(intro + "Каждый опасный шаг спрошу отдельно здесь же.\n\nНачнёт так:\n" + "\n".join(steps_text),
                                decision["steps"], False, "Запустить автопилот?")
     if chat_ok is not None:
         start_ok = chat_ok
@@ -614,7 +630,7 @@ def process_command(user_command: str):
         action = macros.try_memory_command(user_command, action_executor.RECENT_STEPS)
         if action is None:
             action_executor.RECENT_STEPS.clear()      # новая команда — новая «запись» шагов
-            action = try_quick_action(user_command, notify)
+            action = try_quick_action(user_command, alarm_notify)
         if action is not None:
             outcome = _run_quick_action(user_command, action)
         elif config.get("view_only"):

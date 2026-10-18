@@ -23,7 +23,7 @@ Tkinter-ассистент: пишешь/говоришь команду → Gem
 - Язык интерфейса (v1.31.0): `i18n.py` подменяет `text=` в tkinter на лету; словари `lang_en.py`/`lang_uk.py` (ключ — русский текст). Новые надписи в интерфейсе добавлять в оба словаря. С v1.31.1 переведены и трей/уведомления/Telegram/сообщения (через `i18n.t` в `main.notify`, `setup_tray`, `telegram_bot._send`); к промптам Gemini добавляется `i18n.answer_hint()`. Регулярки, промпты и ключевые слова команд НЕ переводить; ключевые слова команд — ru/uk/en прямо в регулярках. Фрагменты f-строк лежат в `FRAG` словарей (подставляются за один проход в `i18n.t`); `logger.log` тоже переводит. Для удаления — `cleanup.py`.
 
 ## Как выпускать версию
-1. Править код; `python -m unittest discover -s tests` (41 тест, Windows не нужен).
+1. Править код; `python -m unittest discover -s tests` (44 теста, Windows не нужен).
 2. Поднять версию в `config.py` (`APP_VERSION`) и `tools/build_installer.py` (`APP_VERSION_LABEL`), записать в `CHANGELOG.md`.
 3. `python tools/build_installer.py` → `python tools/verify_installer.py`.
 4. Коммит с строками Co-Authored-By/Claude-Session, push, отправить `.bat` пользователю.

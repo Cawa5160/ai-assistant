@@ -13,7 +13,7 @@ BASE_DIR = DATA_DIR  # рядом со скриптом (или рядом с .e
 SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
 LOG_FILE = os.path.join(BASE_DIR, "action_log.txt")
 
-APP_VERSION = "1.32.1"
+APP_VERSION = "1.32.2"
 SETTINGS_VERSION = 2  # растёт, когда меняются значения по умолчанию, которые нужно применить и старым установкам
 
 DEFAULTS = {
@@ -21,7 +21,7 @@ DEFAULTS = {
     # Для навигации по экрану нужна модель посильнее lite-версии; gemini-3.5-flash бесплатна
     # (по страницам тарифов Google, сент. 2026). Модели меняются — имя можно поправить в Настройках.
     "model": "gemini-3.5-flash",
-    "agent_max_steps": 15,      # максимум шагов автопилота на одну задачу (каждый шаг = 1 запрос к ИИ)
+    "agent_max_steps": 99999,   # максимум шагов автопилота (практически без ограничения; стоп — кнопка 🛑; защита от зацикливания в agent_loop)
     "requests_per_minute": 8,  # свой лимит запросов к Gemini в минуту на ключ (0 = без ограничения)
     "telegram_approve_in_chat": True,   # подтверждать обычные действия кнопками в Telegram (опасные — только на ПК)
     "telegram_trusted_auto": True,   # безопасные быстрые команды из Telegram (сайт, приложение, скрин) — без вопросов
@@ -84,6 +84,8 @@ def load() -> dict:
     if saved and saved.get("settings_version", 1) < SETTINGS_VERSION:
         data["model"] = DEFAULTS["model"]
     data["settings_version"] = SETTINGS_VERSION
+    if data.get("agent_max_steps") == 15:        # старый лимит по умолчанию — снимаем
+        data["agent_max_steps"] = DEFAULTS["agent_max_steps"]
 
     # Миграция со старого формата (один ключ -> список ключей)
     old_single_key = data.pop("gemini_api_key", None)

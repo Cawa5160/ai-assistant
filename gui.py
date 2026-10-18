@@ -332,6 +332,10 @@ def first_run_wizard() -> list:
 # ---------- автопилот: подтверждение старта ----------
 
 @on_ui
+def _limit_text(max_steps: int) -> str:
+    return f"(не больше {max_steps})" if max_steps < 1000 else "(без ограничения числа шагов)"
+
+
 def confirm_agent_start(goal: str, intent: str, steps_text: list, max_steps: int, auto_seconds: int = 0) -> bool:
     """
     Один раз спрашивает разрешение запустить автопилот на всю задачу (а не на каждый шаг).
@@ -350,7 +354,9 @@ def confirm_agent_start(goal: str, intent: str, steps_text: list, max_steps: int
         tk.Label(win, text=f"   {i}. {text}", font=theme.FONT_MONO, bg=theme.BG,
                  wraplength=540, justify="left").pack(padx=18, anchor="w")
 
-    info = (f"Дальше ИИ сам будет смотреть на экран и делать по одному шагу (не больше {max_steps}).\n"
+    first = (f"Дальше ИИ сам будет смотреть на экран и делать по одному шагу (не больше {max_steps}).\n" if max_steps < 1000
+             else "Дальше ИИ сам будет смотреть на экран и делать по одному шагу (без ограничения числа шагов).\n")
+    info = (first +
             "Потенциально опасные действия — файлы, установка, удаление — он спросит отдельно.\n"
             "Остановить в любой момент: кнопка 🛑 в окне автопилота или резкий рывок мыши "
             "в левый верхний угол экрана.")
@@ -701,7 +707,7 @@ class AgentWindow:
         _dialog_button(confirm_btns, "Нет, стоп", lambda: self._answer(False), "primary", 14).pack(side="left", padx=8)
         _dialog_button(confirm_btns, "Да, разрешаю", lambda: self._answer(True), "danger", 16).pack(side="left", padx=8)
 
-        self.status_label = tk.Label(self.win, text=f"Работаю… (не больше {max_steps} шагов)",
+        self.status_label = tk.Label(self.win, text="Работаю…" + (f" (не больше {max_steps} шагов)" if max_steps < 1000 else ""),
                                      font=theme.FONT_BODY, bg=theme.BG)
         self.status_label.pack(pady=(4, 2))
         self.stop_btn = tk.Button(self.win, text="🛑 Остановить", bg="#B91C1C", fg="white", relief="flat", highlightthickness=0, bd=0,

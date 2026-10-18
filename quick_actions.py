@@ -73,6 +73,11 @@ def _human(seconds: float) -> str:
     return f"{seconds} с"
 
 
+def _ends_at(seconds: float) -> str:
+    import datetime
+    return (datetime.datetime.now() + datetime.timedelta(seconds=seconds)).strftime("%H:%M:%S")
+
+
 def _alarm(title: str, text: str, notify):
     try:
         import winsound
@@ -177,14 +182,14 @@ def try_quick_action(command: str, notify):
         seconds = _seconds(m.group("n"), m.group("unit"))
         if 0 < seconds <= 86400:
             return (f"Таймер на {_human(seconds)}",
-                    lambda: (_start_timer(seconds, "Таймер", notify), f"Таймер на {_human(seconds)} запущен.")[1])
+                    lambda: (_start_timer(seconds, "Таймер", notify), f"Таймер на {_human(seconds)} запущен — сработает в {_ends_at(seconds)}.")[1])
     m = _REMIND.match(command)
     if m:
         seconds = _seconds(m.group("n"), m.group("unit"))
         text = (m.group("text") or "").strip() or "Напоминание"
         if 0 < seconds <= 86400:
             return (f"Напомнить через {_human(seconds)}: {text[:60]}",
-                    lambda: (_start_timer(seconds, text[:80], notify), f"Напомню через {_human(seconds)}: {text[:60]}")[1])
+                    lambda: (_start_timer(seconds, text[:80], notify), f"Напомню через {_human(seconds)} — сработает в {_ends_at(seconds)}: {text[:60]}")[1])
     m = _CALC.match(command)
     if m:
         try:

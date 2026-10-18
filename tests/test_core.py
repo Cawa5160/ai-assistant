@@ -260,5 +260,25 @@ class MultiLanguageCommands(unittest.TestCase):
             self.assertEqual(risk(u), "normal", u)
 
 
+class Release1322(unittest.TestCase):
+    def test_no_step_limit_default(self):
+        import config
+        self.assertGreaterEqual(config.DEFAULTS["agent_max_steps"], 99999)
+
+    def test_timer_reports_end_time(self):
+        import quick_actions as a
+        desc, run = a.try_quick_action("set a timer for 1 minute", lambda *x: None)
+        self.assertIn("сработает в", run())
+
+    def test_unlimited_text_translated(self):
+        import i18n
+        i18n.set_language("en")
+        try:
+            out = i18n.t("Дальше ИИ сам будет смотреть на экран и делать по одному шагу (без ограничения числа шагов).\nДальше")
+            self.assertIn("no limit", out)
+        finally:
+            i18n.set_language("ru")
+
+
 if __name__ == "__main__":
     unittest.main()

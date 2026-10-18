@@ -1074,4 +1074,8 @@ FRAG = {
     'Искать на YouTube: ': 'Search YouTube: ',
     'Искать в Google: ': 'Search Google: ',
     'Сделать скриншот и сохранить ': 'Take a screenshot and save ',
+    '\nАвтопилот сам будет смотреть на экран и действовать без ограничения числа шагов. Каждый опасный шаг спрошу отдельно здесь же.\n\nНачнёт так:\n': "\nThe autopilot will look at the screen and act by itself with no limit on the number of steps. I'll ask separately about every dangerous step right here.\n\nIt will start like this:\n",
+    'Дальше ИИ сам будет смотреть на экран и делать по одному шагу (без ограничения числа шагов).\n': 'Next the AI will look at the screen and do one step at a time (no limit on the number of steps).\n',
+    ' запущен — сработает в ': ' started — it will ring at ',
+    ' — сработает в ': ' — it will ring at ',
 }
