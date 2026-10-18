@@ -9,6 +9,8 @@ import re
 LANGS = {"ru": "Русский", "uk": "Українська", "en": "English"}
 _lang = "ru"
 _exact = {}
+_phrase_rx = None
+_phrase_map = {}
 _phrases = []          # (ключ, перевод) — для подстановки внутри составных строк, длинные первыми
 _words = []            # (регулярка, перевод) для коротких слов (дни недели, «ГБ»)
 _installed = False
@@ -36,15 +38,23 @@ def detect_system_language() -> str:
         return "ru"
 
 
+CAL_WORDS = ("понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье", "января", "февраля", "марта",
+             "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря")
+
+
 def set_language(code: str):
-    global _lang, _exact, _phrases, _words
+    global _lang, _exact, _phrases, _words, _phrase_rx, _phrase_map
     code = code if code in LANGS else "ru"
     _lang, _exact, _phrases, _words = code, {}, [], []
+    _frag = {}
+    _phrase_rx, _phrase_map = None, {}
     if code == "ru":
         return
     try:
         mod = __import__("lang_" + code)
         _exact = dict(mod.TR)
+        _frag = dict(getattr(mod, "FRAG", {}))
+        _exact.update(_frag)
     except Exception:
         return
     cyr_count = lambda k: len(CYR.findall(k))
@@ -52,10 +62,19 @@ def set_language(code: str):
     # целые предложения переводятся только точным совпадением, иначе в данных (история) получалась бы смесь языков.
     is_fragment = lambda k: k != k.strip() or k.endswith(":") or k[:1] in "(.,)—·"
     _phrases = sorted(((k, v) for k, v in _exact.items()
-                       if cyr_count(k) >= 5 and is_fragment(k)),
+                       if (cyr_count(k) >= 5 and is_fragment(k)) or k in _frag),
                       key=lambda kv: -len(kv[0]))
+    _phrase_map = dict(_phrases)
+    _phrase_rx = re.compile("|".join(re.escape(k) for k, _ in _phrases)) if _phrases else None
+    for ru in CAL_WORDS:             # дни недели и месяцы в ответах на «какое сегодня число»
+        tr = _exact.get(ru)
+        if tr:
+            _words.append((re.compile(r"(?<![А-Яа-яЁё])" + ru + r"(?![А-Яа-яЁё])", re.I), tr))
     for ru, tr in DAYS.get(code, {}).items():
         _words.append((re.compile(r"(?<![А-Яа-яЁё])" + ru + r"(?![А-Яа-яЁё])"), tr))
+    units = {"en": (("с", "s"), ("мин", "min"), ("ч", "h")), "uk": (("с", "с"), ("мин", "хв"), ("ч", "год"))}.get(code, ())
+    for ru, tr in units:            # «5 с», «10 мин», «2 ч» — единицы после числа
+        _words.append((re.compile(r"(?<=\d) " + ru + r"(?![А-Яа-яЁё])"), " " + tr))
     if code == "en":
         _words.append((re.compile(r"(?<![А-Яа-яЁё])ГБ(?![А-Яа-яЁё])"), "GB"))
         _words.append((re.compile(r"(?<![А-Яа-яЁё])шаг\."), "step(s)."))
@@ -80,9 +99,8 @@ def t(text):
         if inner is not None:
             return m.group(1) + inner
     out = text
-    for key, value in _phrases:
-        if key in out:
-            out = out.replace(key, value)
+    if _phrase_rx is not None:
+        out = _phrase_rx.sub(lambda m: _phrase_map[m.group(0)], out)     # за один проход: переведённое не пере-заменяется
     for rx, value in _words:
         out = rx.sub(value, out)
     return out

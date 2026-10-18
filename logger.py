@@ -27,4 +27,9 @@ if not _logger.handlers:
 
 
 def log(message: str):
+    try:
+        import i18n
+        message = i18n.t(message)
+    except Exception:
+        pass
     _logger.info(message)

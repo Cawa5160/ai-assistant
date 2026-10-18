@@ -189,12 +189,30 @@ def _call(method: str, token: str = None, http_timeout: int = 35, **params):
     return r.json()
 
 
-_MENU_BUTTONS = {
+_MENU_RU = {
     "📸 Скрин": "/screen", "📊 Статус": "/status", "🛑 Стоп": "/stop", "📜 История": "/history",
     "🗒 Заметки": "/notes", "🔊 Громче": "громче", "🔉 Тише": "тише", "⏯ Пауза": "пауза", "🖥 Рабочий стол": "покажи рабочий стол",
 }
-_KEYBOARD = {"keyboard": [["📸 Скрин", "📊 Статус", "🛑 Стоп"], ["🔊 Громче", "🔉 Тише", "⏯ Пауза"],
-                          ["📜 История", "🗒 Заметки", "🖥 Рабочий стол"]], "resize_keyboard": True, "is_persistent": True}
+_KEY_ROWS = [["📸 Скрин", "📊 Статус", "🛑 Стоп"], ["🔊 Громче", "🔉 Тише", "⏯ Пауза"], ["📜 История", "🗒 Заметки", "🖥 Рабочий стол"]]
+
+
+def _menu_buttons() -> dict:
+    """Подписи кнопок на всех языках интерфейса -> команда (кнопка могла быть показана на другом языке)."""
+    out = dict(_MENU_RU)
+    for code in ("en", "uk"):
+        try:
+            tr = __import__("lang_" + code).TR
+        except Exception:
+            continue
+        for ru, cmd in _MENU_RU.items():
+            out[tr.get(ru, ru)] = cmd
+    return out
+
+
+def _keyboard() -> dict:
+    return {"keyboard": [[i18n.t(b) for b in row] for row in _KEY_ROWS], "resize_keyboard": True, "is_persistent": True}
+
+
 HELP_TEXT = ("Я управляю компьютером как программа на нём. Просто пиши что сделать, например:\n"
              "• открой блокнот и напиши привет\n• найди на ютубе музыку для работы\n• сделай скрин вкладки ютуб\n"
              "• поставь таймер на 10 минут\n• запомни: пароль от wifi на холодильнике\n\n"
@@ -230,7 +248,7 @@ def _send(chat_id, text: str, keyboard: bool = False):
     try:
         parts = list(_chunks(i18n.t(text)))[:6]
         for i, part in enumerate(parts):
-            extra = {"reply_markup": _KEYBOARD} if keyboard and i == len(parts) - 1 else {}
+            extra = {"reply_markup": _keyboard()} if keyboard and i == len(parts) - 1 else {}
             _post_retry("sendMessage", chat_id=chat_id, text=part or "…", **extra)
     except Exception as e:
         log(f"Telegram: не отправилось сообщение: {e}")
@@ -490,7 +508,7 @@ def _handle(msg: dict, from_voice: bool = False):
     if media:
         threading.Thread(target=_handle_media, args=(msg, chat, uid, name) + media, daemon=True).start()
         return
-    text = _MENU_BUTTONS.get(text, text)
+    text = _menu_buttons().get(text, text)
     low = text.lower().split("@")[0]
     if low.startswith(("/start", "/help", "/menu")) or low in ("помощь", "меню", "help"):
         _send(chat, HELP_TEXT, keyboard=True)
@@ -560,17 +578,17 @@ def _run_command(chat, text, uid, name):
 def _register_commands(token):
     try:
         _call("setMyCommands", token=token, http_timeout=15, commands=[
-            {"command": "menu", "description": "Кнопки быстрых действий"},
-            {"command": "screen", "description": "Скриншот экрана"},
-            {"command": "screenfile", "description": "Скриншот файлом (без сжатия)"},
-            {"command": "status", "description": "Что делает ассистент"},
-            {"command": "stop", "description": "Остановить автопилот"},
-            {"command": "history", "description": "Последние команды"},
-            {"command": "clip", "description": "Что в буфере обмена"},
-            {"command": "windows", "description": "Какие окна открыты"},
-            {"command": "notes", "description": "Заметки"},
-            {"command": "macros", "description": "Макросы"},
-            {"command": "help", "description": "Справка"}])
+            {"command": "menu", "description": i18n.t("Кнопки быстрых действий")},
+            {"command": "screen", "description": i18n.t("Скриншот экрана")},
+            {"command": "screenfile", "description": i18n.t("Скриншот файлом (без сжатия)")},
+            {"command": "status", "description": i18n.t("Что делает ассистент")},
+            {"command": "stop", "description": i18n.t("Остановить автопилот")},
+            {"command": "history", "description": i18n.t("Последние команды")},
+            {"command": "clip", "description": i18n.t("Что в буфере обмена")},
+            {"command": "windows", "description": i18n.t("Какие окна открыты")},
+            {"command": "notes", "description": i18n.t("Заметки")},
+            {"command": "macros", "description": i18n.t("Макросы")},
+            {"command": "help", "description": i18n.t("Справка")}])
     except Exception as e:
         log(f"Telegram: меню команд не установилось: {e}")
 

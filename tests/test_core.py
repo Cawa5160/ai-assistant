@@ -231,5 +231,34 @@ class Translation(unittest.TestCase):
         self.assertEqual(i18n.answer_hint(), "")
 
 
+class MultiLanguageCommands(unittest.TestCase):
+    def test_quick_commands_en_uk(self):
+        import quick_commands as q
+        for c in ("open notepad", "відкрий блокнот", "take a screenshot", "зроби скріншот", "louder", "тихіше",
+                  "show desktop", "new tab", "please open chrome", "go to youtube"):
+            self.assertIsNotNone(q.try_quick_plan(c), c)
+
+    def test_quick_actions_en_uk(self):
+        import quick_actions as a
+        for c in ("set a timer for 5 minutes", "постав таймер на 5 хвилин", "what time is it", "котра година",
+                  "remind me in 10 minutes to call mom", "what is 2+2"):
+            self.assertIsNotNone(a.try_quick_action(c, lambda *x: None), c)
+        self.assertEqual(a.calculate("5 plus 7 times 2"), 19)
+
+    def test_memory_commands_en(self):
+        import macros, templates, clipboard_tools
+        self.assertTrue(macros._SAVE_NOTE.match("remember that the wifi is on the fridge"))
+        self.assertTrue(macros._LIST_MACROS.match("my macros"))
+        self.assertTrue(templates._RUN.match("run template morning"))
+        self.assertTrue(clipboard_tools._AI.match("translate the text from clipboard"))
+
+    def test_local_urls_need_confirmation(self):
+        import plan_validator as pv
+        risk = lambda u: pv.classify_risk({"action": "open_url", "args": {"url": u}})
+        self.assertEqual(risk("https://www.youtube.com"), "low")
+        for u in ("http://localhost:8080", "http://192.168.1.1", "https://user@evil.com", "http://router"):
+            self.assertEqual(risk(u), "normal", u)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -10,17 +10,17 @@ import threading
 
 from logger import log
 
-_UNIT = r"(?P<unit>секунд\w*|сек\w*|минут\w*|мин\w*|час\w*|ч|с|м)"
+_UNIT = r"(?P<unit>секунд\w*|сек\w*|минут\w*|мин\w*|час\w*|секунд\w*|хвилин\w*|хв\w*|годин\w*|год\w*|seconds?|secs?|minutes?|mins?|hours?|hrs?|ч|с|м|s|m|h)"
 _TIMER = re.compile(
-    r"^\s*(?:поставь|установи|запусти|засеки|включи|заведи)?\s*(?:мне\s+)?(?:таймер|будильник)\s*(?:на|через)?\s*"
+    r"^\s*(?:поставь|установи|запусти|засеки|включи|заведи|постав|встанови|set|start)?\s*(?:мне\s+|мені\s+|me\s+|a\s+|an\s+)?(?:таймер|будильник|timer|alarm)\s*(?:на|через|на|for|in)?\s*"
     r"(?P<n>\d+(?:[.,]\d+)?)\s*" + _UNIT + r"\s*[.!]*\s*$", re.I)
 _REMIND = re.compile(
-    r"^\s*напомни(?:\s+мне)?\s+через\s+(?P<n>\d+(?:[.,]\d+)?)\s*" + _UNIT +
-    r"\s*,?\s*(?:(?:о том,?\s+что|что|чтобы|про|о|об)\b\s*)?(?P<text>.*?)\s*[.!]*\s*$", re.I)
-_CALC = re.compile(r"^\s*(?:сколько будет|посчитай|вычисли|реши|calc)\s+(?P<expr>.+?)\s*[?=.!]*\s*$", re.I)
+    r"^\s*(?:напомни(?:\s+мне)?|нагадай(?:\s+мені)?|remind\s+me)\s+(?:через|in)\s+(?P<n>\d+(?:[.,]\d+)?)\s*" + _UNIT +
+    r"\s*,?\s*(?:(?:о том,?\s+что|что|чтобы|про|о|об|що|щоб|to|that|about)\b\s*)?(?P<text>.*?)\s*[.!]*\s*$", re.I)
+_CALC = re.compile(r"^\s*(?:сколько будет|посчитай|вычисли|реши|calc|calculate|compute|what is|what's|how much is|скільки буде|порахуй|обчисли|розв'яжи)\s+(?P<expr>.+?)\s*[?=.!]*\s*$", re.I)
 _FOLDER = re.compile(
-    r"^\s*(?:открой|открыть|покажи|відкрий)\s+(?:папку\s+)?(?P<f>загрузки|загрузк\w*|downloads|документы|документи|documents|"
-    r"рабочий стол|desktop|изображения|картинки|фото|pictures|музыку|музыка|видео|диск c|диск с)\s*[.!]*\s*$", re.I)
+    r"^\s*(?:открой|открыть|покажи|відкрий|open|show)\s+(?:папку\s+|папку\s+|folder\s+|my\s+|the\s+)?(?P<f>загрузки|загрузк\w*|downloads|документы|документи|documents|"
+    r"рабочий стол|desktop|изображения|картинки|фото|pictures|музыку|музыка|видео|диск c|диск с|завантаження|робочий стіл|зображення|картинки|музику|відео|music|videos|photos)\s*[.!]*\s*$", re.I)
 
 _FOLDERS = {
     "загрузки": "downloads", "загрузк": "downloads", "downloads": "downloads",
@@ -28,6 +28,8 @@ _FOLDERS = {
     "рабочий стол": "desktop", "desktop": "desktop",
     "изображения": "pictures", "картинки": "pictures", "фото": "pictures", "pictures": "pictures",
     "музыку": "music", "музыка": "music", "видео": "video", "диск c": "c", "диск с": "c",
+    "завантаження": "downloads", "робочий стіл": "desktop", "зображення": "pictures", "музику": "music", "відео": "video",
+    "music": "music", "videos": "video", "photos": "pictures",
 }
 _REG = {"documents": "Personal", "downloads": "{374DE290-123F-4565-9164-39C4925E467B}", "desktop": "Desktop",
         "pictures": "My Pictures", "music": "My Music", "video": "My Video"}
@@ -55,9 +57,9 @@ def known_folder(kind: str) -> str:
 def _seconds(n: str, unit: str) -> float:
     value = float(n.replace(",", "."))
     u = unit.lower()
-    if u.startswith(("мин", "м")) and not u.startswith("мс"):
+    if u.startswith(("мин", "м", "хв", "min", "m")) and not u.startswith(("мс", "ms")):
         return value * 60
-    if u.startswith(("час", "ч")):
+    if u.startswith(("час", "ч", "год", "hour", "hr", "h")):
         return value * 3600
     return value
 
@@ -114,6 +116,8 @@ def calculate(expr: str):
     s = expr.lower()
     for words, sign in (("умножить на", "*"), ("помножить на", "*"), ("разделить на", "/"), ("поделить на", "/"),
                         ("в степени", "**"), ("плюс", "+"), ("минус", "-"), ("процентов от", "*0.01*"),
+                        ("помножити на", "*"), ("поділити на", "/"), ("в степені", "**"), ("мінус", "-"), ("відсотків від", "*0.01*"),
+                        ("multiplied by", "*"), ("times", "*"), ("divided by", "/"), ("to the power of", "**"), ("plus", "+"), ("minus", "-"), ("percent of", "*0.01*"),
                         (" на ", "*"), ("×", "*"), ("÷", "/"), (":", "/"), ("^", "**")):
         s = s.replace(words, f" {sign} ")
     s = re.sub(r"(?<=\d),(?=\d)", ".", s)
@@ -136,9 +140,9 @@ def _fmt(value) -> str:
     return str(value)
 
 
-_TIME = re.compile(r"^\s*(?:который\s+час|сколько\s+времени|скажи\s+время|время)\s*[?.!]*\s*$", re.I)
-_DATE = re.compile(r"^\s*(?:какое\s+сегодня\s+число|какая\s+сегодня\s+дата|какой\s+сегодня\s+день|дата|сегодняшняя\s+дата)\s*[?.!]*\s*$", re.I)
-_SETTINGS = re.compile(r"^\s*(?:открой|открыть)\s+(?P<w>параметры|настройки(?:\s+windows)?|настройки\s+виндовс|панель управления)\s*[.!]*\s*$", re.I)
+_TIME = re.compile(r"^\s*(?:который\s+час|сколько\s+времени|скажи\s+время|время|what\s+time\s+is\s+it|what's\s+the\s+time|what\s+is\s+the\s+time|(?:tell\s+me\s+)?the\s+time|time|котра\s+година|скільки\s+часу|який\s+час|час)\s*[?.!]*\s*$", re.I)
+_DATE = re.compile(r"^\s*(?:какое\s+сегодня\s+число|какая\s+сегодня\s+дата|какой\s+сегодня\s+день|дата|сегодняшняя\s+дата|what's\s+the\s+date|what\s+is\s+the\s+date|what\s+is\s+today's\s+date|what\s+day\s+is\s+(?:it|today)|today's\s+date|date|яка\s+сьогодні\s+дата|яке\s+сьогодні\s+число|який\s+сьогодні\s+день|сьогоднішня\s+дата)\s*[?.!]*\s*$", re.I)
+_SETTINGS = re.compile(r"^\s*(?:открой|открыть|відкрий|open)\s+(?P<w>параметры|настройки(?:\s+windows)?|настройки\s+виндовс|панель управления|параметри|налаштування(?:\s+windows)?|панель керування|(?:windows\s+)?settings|control\s+panel)\s*[.!]*\s*$", re.I)
 _DAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
 _MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"]
 
@@ -166,7 +170,7 @@ def try_quick_action(command: str, notify):
         return ("Сказать дату", lambda: f"Сегодня {_DAYS[d.weekday()]}, {d.day} {_MONTHS[d.month - 1]} {d.year}")
     m = _SETTINGS.match(command)
     if m:
-        target = "control" if "панель" in m.group("w").lower() else "ms-settings:"
+        target = "control" if re.search(r"панель|control", m.group("w").lower()) else "ms-settings:"
         return ("Открыть " + m.group("w"), lambda: (os.startfile(target), "Открыто: " + m.group("w"))[1])
     m = _TIMER.match(command)
     if m:
@@ -189,7 +193,7 @@ def try_quick_action(command: str, notify):
             return None            # не арифметика — пусть разбирает ИИ
         return (f"Посчитать: {m.group('expr')[:60]}", lambda: f"{m.group('expr').strip()} = {result}")
     m = _FOLDER.match(command)
-    if m and m.group("f").lower() in ("рабочий стол", "desktop") and "папк" not in command.lower():
+    if m and m.group("f").lower() in ("рабочий стол", "desktop", "робочий стіл") and not re.search(r"папк|folder", command.lower()):
         return None          # «покажи рабочий стол» = свернуть окна (Win+D), а не открыть папку в проводнике
     if m:
         kind = _FOLDERS[m.group("f").lower()] if m.group("f").lower() in _FOLDERS else _FOLDERS.get(m.group("f").lower()[:7], "downloads")

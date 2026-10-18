@@ -26,11 +26,11 @@ FILES_TO_EMBED = [
     "screen_utils.py", "secure_store.py", "shortcuts.py", "single_instance.py", "theme.py",
     "ui_thread.py", "voice_input.py", "voice_output.py",
     "requirements.txt", "README.md", "CHANGELOG.md", "LICENSE",
-    "start.bat", "uninstall.bat", "build_exe.bat",
+    "start.bat", "uninstall.bat", "cleanup.py", "build_exe.bat",
     "assets/app.ico", "assets/logo_128.png", "assets/logo_64.png",
 ]
 
-APP_VERSION_LABEL = "1.31.1"
+APP_VERSION_LABEL = "1.32.0"
 SUBDIRS = sorted({os.path.dirname(p) for p in FILES_TO_EMBED if "/" in p})
 
 

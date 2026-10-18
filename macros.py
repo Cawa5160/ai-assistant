@@ -23,16 +23,16 @@ MAX_MACROS, MAX_NOTES, MAX_NOTE_LEN = 50, 30, 200
 NOTE_ACTIONS_SKIP = set()
 
 _SAVE_MACRO = re.compile(
-    r"^\s*(?:пожалуйста[,\s]+)?(?:запомни|запиши|сохрани|создай)\s+(?:это\s+|эту\s+команду\s+|эти\s+действия\s+|последнюю\s+команду\s+)?"
-    r"(?:как\s+)?(?:макрос\s+)?(?:под\s+именем\s+|с\s+названием\s+|называется\s+)?(?P<name>[^\n]{1,40}?)\s*[.!]*\s*$", re.I)
-_SAVE_MACRO_STRICT = re.compile(r"^\s*(?:запомни|запиши|сохрани|создай)\s+(?:это\s+|эту\s+команду\s+|эти\s+действия\s+|последнюю\s+команду\s+)?"
-                                r"(?:как\s+(?:макрос\s+)?|макрос\s+)", re.I)
-_RUN_MACRO = re.compile(r"^\s*(?:запусти\s+|выполни\s+)?макрос\s+(?P<name>[^\n]{1,40}?)\s*[.!]*\s*$", re.I)
-_DEL_MACRO = re.compile(r"^\s*(?:удали|забудь)\s+макрос\s+(?P<name>[^\n]{1,40}?)\s*[.!]*\s*$", re.I)
-_LIST_MACROS = re.compile(r"^\s*(?:мои\s+макросы|список\s+макросов|покажи\s+макросы)\s*[.!]*\s*$", re.I)
-_SAVE_NOTE = re.compile(r"^\s*запомни[,:]?\s+(?:что\s+)?(?P<text>[^\n]{3,%d})\s*$" % MAX_NOTE_LEN, re.I)
-_LIST_NOTES = re.compile(r"^\s*(?:мои\s+заметки|покажи\s+заметки|что\s+ты\s+помнишь)\s*[?.!]*\s*$", re.I)
-_DEL_NOTE = re.compile(r"^\s*забудь\s+заметку\s+(?P<n>\d{1,2})\s*[.!]*\s*$", re.I)
+    r"^\s*(?:пожалуйста[,\s]+|please\s+|будь\s+ласка[,\s]+)?(?:запомни|запиши|сохрани|создай|remember|save|create|запам\'ятай|збережи|створи)\s+(?:это\s+|эту\s+команду\s+|эти\s+действия\s+|последнюю\s+команду\s+|this\s+|this\s+command\s+|these\s+actions\s+|the\s+last\s+command\s+|це\s+|цю\s+команду\s+|ці\s+дії\s+|останню\s+команду\s+)?"
+    r"(?:как\s+|as\s+|як\s+)?(?:макрос\s+|macro\s+)?(?:под\s+именем\s+|с\s+названием\s+|называется\s+|named\s+|called\s+|під\s+іменем\s+|з\s+назвою\s+|називається\s+)?(?P<name>[^\n]{1,40}?)\s*[.!]*\s*$", re.I)
+_SAVE_MACRO_STRICT = re.compile(r"^\s*(?:запомни|запиши|сохрани|создай|remember|save|create|запам\'ятай|збережи|створи)\s+(?:это\s+|эту\s+команду\s+|эти\s+действия\s+|последнюю\s+команду\s+|this\s+|this\s+command\s+|these\s+actions\s+|the\s+last\s+command\s+|це\s+|цю\s+команду\s+|ці\s+дії\s+|останню\s+команду\s+)?"
+                                r"(?:(?:как|as|як)\s+(?:(?:макрос|macro)\s+)?|(?:макрос|macro)\s+)", re.I)
+_RUN_MACRO = re.compile(r"^\s*(?:запусти\s+|выполни\s+|run\s+|execute\s+|виконай\s+)?(?:макрос|macro)\s+(?P<name>[^\n]{1,40}?)\s*[.!]*\s*$", re.I)
+_DEL_MACRO = re.compile(r"^\s*(?:удали|забудь|delete|remove|forget|видали)\s+(?:макрос|macro)\s+(?P<name>[^\n]{1,40}?)\s*[.!]*\s*$", re.I)
+_LIST_MACROS = re.compile(r"^\s*(?:мои\s+макросы|список\s+макросов|покажи\s+макросы|my\s+macros|list\s+(?:of\s+)?macros|show\s+(?:my\s+)?macros|мої\s+макроси|список\s+макросів|покажи\s+макроси)\s*[.!]*\s*$", re.I)
+_SAVE_NOTE = re.compile(r"^\s*(?:запомни|remember|запам'ятай)[,:]?\s+(?:что\s+|that\s+|що\s+)?(?P<text>[^\n]{3,%d})\s*$" % MAX_NOTE_LEN, re.I)
+_LIST_NOTES = re.compile(r"^\s*(?:мои\s+заметки|покажи\s+заметки|что\s+ты\s+помнишь|my\s+notes|show\s+(?:my\s+)?notes|what\s+do\s+you\s+remember|мої\s+нотатки|покажи\s+нотатки|що\s+ти\s+пам'ятаєш)\s*[?.!]*\s*$", re.I)
+_DEL_NOTE = re.compile(r"^\s*(?:забудь|forget|delete|remove)\s+(?:заметку|note|нотатку)\s+(?:№\s*|#\s*|number\s+)?(?P<n>\d{1,2})\s*[.!]*\s*$", re.I)
 
 
 def _load(path):

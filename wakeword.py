@@ -14,7 +14,7 @@ import config
 import voice_input as vi
 from logger import log
 
-WAKE_RE = re.compile(r"(?:^|\W)(?:(?:эй|ей|хей|привет|слушай|окей|ok|hey|hi)\s+)?"
+WAKE_RE = re.compile(r"(?:^|\W)(?:(?:эй|ей|хей|привет|слушай|окей|ok|hey|hi|гей|привіт|слухай|окей|hello)\s+)?"
                      r"(?P<w>а?сс?истент|ассистэнт|assistant)\b[\s,.:!\-]*(?P<rest>.*)$", re.I | re.S)
 PHRASE_MAX_S = 5.0
 END_SILENCE_S = 0.7

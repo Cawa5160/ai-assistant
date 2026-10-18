@@ -11,14 +11,16 @@ APPS = {
     "калькулятор": "calc", "calculator": "calc", "calc": "calc",
     "проводник": "explorer", "explorer": "explorer",
     "пейнт": "mspaint", "paint": "mspaint", "ножницы": "snippingtool",
-    "хром": "chrome", "chrome": "chrome", "браузер": "chrome",
+    "хром": "chrome", "chrome": "chrome", "браузер": "chrome", "browser": "chrome", "web browser": "chrome",
+    "провідник": "explorer", "file explorer": "explorer", "ножиці": "snippingtool", "snipping tool": "snippingtool",
+    "блокнот": "notepad",
 }
 
 _PATTERN = re.compile(
-    r"^\s*(?:пожалуйста[,\s]+)?(?:открой|открыть|запусти|запустить|включи|відкрий|запусти|open|launch|start)\s+"
-    r"(?:программу\s+|приложение\s+|програму\s+|застосунок\s+)?"
+    r"^\s*(?:пожалуйста[,\s]+)?(?:открой|открыть|запусти|запустить|включи|відкрий|запусти|open|launch|start|run)\s+"
+    r"(?:программу\s+|приложение\s+|програму\s+|застосунок\s+|the\s+|app\s+|program\s+)?"
     r"(?P<app>" + "|".join(sorted(map(re.escape, APPS), key=len, reverse=True)) + r")\b"
-    r"(?:\s+и\s+(?:там\s+)?(?:напиши|напечатай|введи|набери|впиши|write|type)\s+(?:там\s+)?(?P<text>.+?))?"
+    r"(?:\s+(?:и|і|and)\s+(?:там\s+|there\s+)?(?:напиши|напечатай|введи|набери|впиши|напиши|надрукуй|write|type|enter)\s+(?:там\s+|there\s+)?(?P<text>.+?))?"
     r"\s*[.!]*\s*$",
     re.IGNORECASE | re.DOTALL,
 )
@@ -40,32 +42,40 @@ SITES = {
     "гемини": "https://gemini.google.com", "gemini": "https://gemini.google.com",
     "диск": "https://drive.google.com", "гугл диск": "https://drive.google.com",
     "карты": "https://maps.google.com", "переводчик": "https://translate.google.com",
+    "mail": "https://mail.google.com", "email": "https://mail.google.com", "пошту": "https://mail.google.com", "пошта": "https://mail.google.com",
+    "wikipedia": "https://en.wikipedia.org", "вікіпедію": "https://uk.wikipedia.org", "вікіпедія": "https://uk.wikipedia.org",
+    "drive": "https://drive.google.com", "google drive": "https://drive.google.com", "maps": "https://maps.google.com",
+    "карти": "https://maps.google.com", "translate": "https://translate.google.com", "translator": "https://translate.google.com",
+    "перекладач": "https://translate.google.com", "ґемні": "https://gemini.google.com", "гугл": "https://www.google.com",
+    "гітхаб": "https://github.com", "інстаграм": "https://www.instagram.com", "фейсбук": "https://www.facebook.com",
+    "ватсап": "https://web.whatsapp.com", "твіч": "https://www.twitch.tv", "спотіфай": "https://open.spotify.com",
+    "діскорд": "https://discord.com/app", "ютуб": "https://www.youtube.com",
 }
 _SITE = re.compile(
-    r"^\s*(?:пожалуйста[,\s]+)?(?:открой|открыть|зайди на|зайди в|перейди на|відкрий|open)\s+(?:сайт\s+)?"
+    r"^\s*(?:пожалуйста[,\s]+)?(?:открой|открыть|зайди на|зайди в|перейди на|відкрий|open|go to|visit|перейди на|зайди на)\s+(?:сайт\s+|site\s+|the\s+|website\s+|сайт\s+)?"
     r"(?P<site>" + "|".join(sorted(map(re.escape, SITES), key=len, reverse=True)) + r")\s*[.!]*\s*$", re.I)
 _YT = re.compile(
-    r"^\s*(?:найди|поищи|включи|покажи|знайди|search)\s+(?:на|в|у)\s+(?:ютубе|ютуб|youtube|ютьюбе)\s+(?P<q>.+?)\s*[.!]*\s*$", re.I)
+    r"^\s*(?:найди|поищи|включи|покажи|знайди|search|find|play|watch|шукай)\s+(?:на|в|у|on|in|for)?\s*(?:ютубе|ютуб|youtube|ютьюбе|ютубі)\s+(?P<q>.+?)\s*[.!]*\s*$", re.I)
 _GOOGLE = re.compile(
-    r"^\s*(?:(?:найди|поищи|знайди|search)\s+(?:в|у|на)\s+(?:гугле|гугл|google|интернете|інтернеті)|загугли|погугли|google)\s+"
+    r"^\s*(?:(?:найди|поищи|знайди|search|find|look up)\s+(?:в|у|на|on|in|for)?\s*(?:гугле|гугл|google|интернете|інтернеті|the web|the internet|web)|загугли|погугли|загугли|google)\s+"
     r"(?P<q>.+?)\s*[.!]*\s*$", re.I)
 _SCREENSHOT = re.compile(
-    r"^\s*(?:пожалуйста[,\s]+)?(?:сделай\s+|зроби\s+|сними\s+)?(?:скриншот|скрин|снимок экрана|знімок екрана)(?:\s+экрана)?"
-    r"(?:\s+и\s+(?:сохрани|збережи|положи)(?:\s+его|\s+її)?)?"
-    r"(?P<where>\s+(?:на\s+)?(?:рабочем\s+столе|рабочий\s+стол|главном\s+экране|главный\s+экран|столе|робочому\s+столі))?\s*[.!]*\s*$", re.I)
-_VOL_UP = re.compile(r"^\s*(?:сделай\s+)?(?:громче|прибавь (?:звук|громкость)|увеличь громкость|звук погромче)\s*[.!]*\s*$", re.I)
-_VOL_DOWN = re.compile(r"^\s*(?:сделай\s+)?(?:тише|убавь (?:звук|громкость)|уменьши громкость|звук потише)\s*[.!]*\s*$", re.I)
-_MUTE = re.compile(r"^\s*(?:выключи звук|включи звук|без звука|заглуши|mute|отключи звук)\s*[.!]*\s*$", re.I)
+    r"^\s*(?:пожалуйста[,\s]+)?(?:сделай\s+|зроби\s+|сними\s+|take\s+(?:a\s+)?|make\s+(?:a\s+)?)?(?:скриншот|скрин|снимок экрана|знімок екрана|скріншот|скрін|screenshot|screen\s*shot|screen\s*capture)(?:\s+экрана)?"
+    r"(?:\s+(?:и|і|and)\s+(?:сохрани|збережи|положи|save|put)(?:\s+его|\s+її|\s+it)?)?"
+    r"(?P<where>\s+(?:на\s+|on\s+|to\s+|in\s+)?(?:the\s+)?(?:рабочем\s+столе|рабочий\s+стол|главном\s+экране|главный\s+экран|столе|робочому\s+столі|робочий\s+стіл|desktop))?\s*[.!]*\s*$", re.I)
+_VOL_UP = re.compile(r"^\s*(?:сделай\s+|make\s+it\s+|зроби\s+)?(?:громче|прибавь (?:звук|громкость)|увеличь громкость|звук погромче|louder|volume up|turn (?:it |the volume )?up|increase (?:the )?volume|raise (?:the )?volume|гучніше|додай звук|збільш гучність|звук голосніше)\s*[.!]*\s*$", re.I)
+_VOL_DOWN = re.compile(r"^\s*(?:сделай\s+|make\s+it\s+|зроби\s+)?(?:тише|убавь (?:звук|громкость)|уменьши громкость|звук потише|quieter|volume down|turn (?:it |the volume )?down|lower (?:the )?volume|decrease (?:the )?volume|тихіше|зменш гучність|прибери звук|звук тихіше)\s*[.!]*\s*$", re.I)
+_MUTE = re.compile(r"^\s*(?:выключи звук|включи звук|без звука|заглуши|mute|unmute|mute (?:the )?sound|отключи звук|вимкни звук|увімкни звук|без звуку|заглуши звук)\s*[.!]*\s*$", re.I)
 _MEDIA = [
-    (re.compile(r"^\s*(?:пауза|поставь на паузу|продолжи музыку|играй|play|pause)\s*[.!]*\s*$", re.I), "playpause", "Пауза / воспроизведение"),
-    (re.compile(r"^\s*(?:следующий трек|следующая песня|дальше трек|next)\s*[.!]*\s*$", re.I), "nexttrack", "Следующий трек"),
-    (re.compile(r"^\s*(?:предыдущий трек|предыдущая песня|прошлый трек|previous)\s*[.!]*\s*$", re.I), "prevtrack", "Предыдущий трек"),
+    (re.compile(r"^\s*(?:пауза|поставь на паузу|продолжи музыку|играй|play|pause|resume|pause (?:the )?music|play (?:the )?music|став на паузу|продовж музику|грай)\s*[.!]*\s*$", re.I), "playpause", "Пауза / воспроизведение"),
+    (re.compile(r"^\s*(?:следующий трек|следующая песня|дальше трек|next|next track|next song|skip|skip (?:this )?(?:track|song)|наступний трек|наступна пісня|далі трек)\s*[.!]*\s*$", re.I), "nexttrack", "Следующий трек"),
+    (re.compile(r"^\s*(?:предыдущий трек|предыдущая песня|прошлый трек|previous|previous track|previous song|go back a track|попередній трек|попередня пісня)\s*[.!]*\s*$", re.I), "prevtrack", "Предыдущий трек"),
 ]
 
 
 _SHOW_DESKTOP = re.compile(r"^\s*(?:покажи рабочий стол|открой рабочий стол|покажи робочий стіл|відкрий робочий стіл|"
-                           r"сверни все окна|сверни всё|сверни все|покажи десктоп)\s*[.!]*\s*$", re.I)
-_CLOSE_WINDOW = re.compile(r"^\s*(?:закрой|закрыть)\s+(?:это\s+|текущее\s+)?окно\s*[.!]*\s*$", re.I)
+                           r"сверни все окна|сверни всё|сверни все|покажи десктоп|show (?:the )?desktop|minimi[sz]e all(?: windows)?|go to (?:the )?desktop|згорни всі вікна|покажи десктоп)\s*[.!]*\s*$", re.I)
+_CLOSE_WINDOW = re.compile(r"^\s*(?:закрой|закрыть|закрий|close)\s+(?:это\s+|текущее\s+|це\s+|поточне\s+|this\s+|the\s+current\s+|current\s+|the\s+)?(?:окно|вікно|window)\s*[.!]*\s*$", re.I)
 
 
 # (шаблон, клавиши, описание, trusted) — горячие клавиши в текущем окне. «Опасные» (закрыть, заблокировать) — без автозапуска
@@ -74,22 +84,22 @@ def _hk(pat):
 
 
 HOTKEY_COMMANDS = [
-    (_hk(r"новая вкладка|открой новую вкладку"), ["ctrl", "t"], "Новая вкладка (Ctrl+T)", True),
-    (_hk(r"закрой вкладку|закрыть вкладку"), ["ctrl", "w"], "Закрыть вкладку (Ctrl+W)", False),
-    (_hk(r"обнови страницу|обнови|перезагрузи страницу"), ["f5"], "Обновить страницу (F5)", True),
-    (_hk(r"на весь экран|полноэкранный режим"), ["f11"], "Во весь экран (F11)", True),
-    (_hk(r"найди на странице|поиск на странице"), ["ctrl", "f"], "Поиск на странице (Ctrl+F)", True),
-    (_hk(r"скопируй|копировать"), ["ctrl", "c"], "Копировать (Ctrl+C)", True),
-    (_hk(r"вставь|вставить"), ["ctrl", "v"], "Вставить (Ctrl+V)", True),
-    (_hk(r"выдели всё|выдели все|выделить всё"), ["ctrl", "a"], "Выделить всё (Ctrl+A)", True),
-    (_hk(r"отмени|отменить действие"), ["ctrl", "z"], "Отменить (Ctrl+Z)", True),
-    (_hk(r"сохрани файл|сохрани документ"), ["ctrl", "s"], "Сохранить (Ctrl+S)", False),
-    (_hk(r"диспетчер задач|открой диспетчер задач"), ["ctrl", "shift", "esc"], "Диспетчер задач", True),
-    (_hk(r"сверни окно|свернуть окно"), ["win", "down"], "Свернуть окно (Win+↓)", True),
-    (_hk(r"разверни окно|развернуть окно"), ["win", "up"], "Развернуть окно (Win+↑)", True),
-    (_hk(r"переключи окно|следующее окно"), ["alt", "tab"], "Переключить окно (Alt+Tab)", True),
-    (_hk(r"заблокируй (?:компьютер|экран)|заблокировать компьютер"), ["win", "l"], "Заблокировать компьютер (Win+L)", False),
-    (_hk(r"буфер обмена|открой буфер обмена"), ["win", "v"], "Журнал буфера обмена (Win+V)", True),
+    (_hk(r"новая вкладка|открой новую вкладку|нова вкладка|відкрий нову вкладку|new tab|open (?:a )?new tab"), ["ctrl", "t"], "Новая вкладка (Ctrl+T)", True),
+    (_hk(r"закрой вкладку|закрыть вкладку|закрий вкладку|close (?:the |this )?tab"), ["ctrl", "w"], "Закрыть вкладку (Ctrl+W)", False),
+    (_hk(r"обнови страницу|обнови|перезагрузи страницу|оновити сторінку|онови сторінку|онови|refresh|reload|refresh (?:the )?page|reload (?:the )?page"), ["f5"], "Обновить страницу (F5)", True),
+    (_hk(r"на весь экран|полноэкранный режим|на весь екран|повноекранний режим|full ?screen|go full ?screen"), ["f11"], "Во весь экран (F11)", True),
+    (_hk(r"найди на странице|поиск на странице|знайди на сторінці|пошук на сторінці|find on (?:the )?page|search (?:on )?(?:the )?page"), ["ctrl", "f"], "Поиск на странице (Ctrl+F)", True),
+    (_hk(r"скопируй|копировать|скопіюй|копіювати|copy|copy (?:it|this|that)"), ["ctrl", "c"], "Копировать (Ctrl+C)", True),
+    (_hk(r"вставь|вставить|встав|вставити|paste|paste (?:it|here)"), ["ctrl", "v"], "Вставить (Ctrl+V)", True),
+    (_hk(r"выдели всё|выдели все|выделить всё|виділи все|виділити все|select all"), ["ctrl", "a"], "Выделить всё (Ctrl+A)", True),
+    (_hk(r"отмени|отменить действие|скасуй|скасувати дію|undo|undo (?:that|it)"), ["ctrl", "z"], "Отменить (Ctrl+Z)", True),
+    (_hk(r"сохрани файл|сохрани документ|збережи файл|збережи документ|save (?:the )?file|save (?:the )?document|save it"), ["ctrl", "s"], "Сохранить (Ctrl+S)", False),
+    (_hk(r"диспетчер задач|открой диспетчер задач|диспетчер завдань|відкрий диспетчер завдань|task manager|open (?:the )?task manager"), ["ctrl", "shift", "esc"], "Диспетчер задач", True),
+    (_hk(r"сверни окно|свернуть окно|згорни вікно|minimi[sz]e (?:the |this )?window"), ["win", "down"], "Свернуть окно (Win+↓)", True),
+    (_hk(r"разверни окно|развернуть окно|розгорни вікно|maximi[sz]e (?:the |this )?window"), ["win", "up"], "Развернуть окно (Win+↑)", True),
+    (_hk(r"переключи окно|следующее окно|перемкни вікно|наступне вікно|switch (?:the )?window|next window"), ["alt", "tab"], "Переключить окно (Alt+Tab)", True),
+    (_hk(r"заблокируй (?:компьютер|экран)|заблокировать компьютер|заблокуй (?:комп.ютер|екран)|lock (?:the )?(?:computer|screen|pc)"), ["win", "l"], "Заблокировать компьютер (Win+L)", False),
+    (_hk(r"буфер обмена|открой буфер обмена|буфер обміну|відкрий буфер обміну|clipboard history|open (?:the )?clipboard"), ["win", "v"], "Журнал буфера обмена (Win+V)", True),
 ]
 
 
@@ -117,7 +127,7 @@ def _simple_plan(command: str):
             "url": "https://www.google.com/search?q=" + quote_plus(q)}}])
     m = _SCREENSHOT.match(command)
     if m:
-        where = "desktop" if (m.group("where") or re.search(r"сохрани|збережи", command, re.I)) else "pictures"
+        where = "desktop" if (m.group("where") or re.search(r"сохрани|збережи|save", command, re.I)) else "pictures"
         title = "на рабочий стол" if where == "desktop" else "в Изображения → Screenshots"
         return _plan(f"Сделать скриншот и сохранить {title}",
                      [{"action": "save_screenshot", "args": {"where": where}}])
@@ -141,13 +151,14 @@ def _simple_plan(command: str):
 
 
 _LOOSE = re.compile(r"^\s*(?:пожалуйста[,\s]+|будь\s+ласка[,\s]+)?(?P<verb>открой\w*|открыть|запусти\w*|запустить|включи|"
-                    r"відкрий\w*|відкрити|запусти\w*|запустити|увімкни|open|launch|start)\s+"
-                    r"(?:программу\s+|приложение\s+|програму\s+|застосунок\s+|сайт\s+)?(?P<w>[\w.\-]{3,20})", re.I)
+                    r"відкрий\w*|відкрити|запусти\w*|запустити|увімкни|open|launch|start|run)\s+"
+                    r"(?:программу\s+|приложение\s+|програму\s+|застосунок\s+|сайт\s+|the\s+|app\s+|program\s+)?(?P<w>[\w.\-]{3,20})", re.I)
 
 
 def _normalize(command: str) -> str:
     """Приводит команду к виду, который понимают шаблоны: синонимы глагола, «пожалуйста» в конце, опечатки в названии."""
     c = re.sub(r"[\s,]+(?:пожалуйста|будь\s+ласка|please)\s*[.!]*\s*$", "", command or "", flags=re.I)
+    c = re.sub(r"^\s*(?:please|can you|could you|пожалуйста|будь\s+ласка)[,\s]+", "", c, flags=re.I)
     m = _LOOSE.match(c)
     if not m:
         return c

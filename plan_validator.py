@@ -207,6 +207,24 @@ def validate_plan(plan):
     return valid_steps, rejected
 
 
+def _is_local_or_odd_url(url: str) -> bool:
+    """localhost, адреса вида 192.168.x.x / 127.x / IP, «user@host», нестандартные порты — открывать только с подтверждением."""
+    import ipaddress
+    from urllib.parse import urlparse
+    p = urlparse(url if "://" in url else "https://" + url)
+    host = (p.hostname or "").lower()
+    if not host or "@" in (p.netloc or "") or host == "localhost" or host.endswith((".local", ".lan", ".internal", ".localhost")):
+        return True
+    if "." not in host:
+        return True                                  # одно имя без точки — внутренняя сеть
+    try:
+        ipaddress.ip_address(host)
+        return True                                  # голый IP
+    except ValueError:
+        pass
+    return p.port not in (None, 80, 443)
+
+
 def classify_risk(step: dict) -> str:
     """
     Возвращает 'high' | 'low' | 'normal'.
@@ -227,6 +245,9 @@ def classify_risk(step: dict) -> str:
     text_blob = f"{action} {args}".lower()
     if any(word in text_blob for word in config.get("dangerous_keywords")):
         return "high"
+
+    if action == "open_url" and _is_local_or_odd_url(str(args.get("url", ""))):
+        return "normal"          # локальные адреса, IP, адреса с логином — не «заведомо безопасный сайт», нужно подтверждение
 
     if action in LOW_RISK_ACTIONS:
         return "low"

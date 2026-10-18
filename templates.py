@@ -23,15 +23,19 @@ BUILTIN = {
     "вечер": ["открой ютуб", "громче"],
 }
 
-_RUN = re.compile(r"^\s*(?:запусти\s+|выполни\s+|включи\s+)?шаблон\s+(?P<name>[^\n:;]{1,30}?)\s*[.!]*\s*$", re.I)
-_LIST = re.compile(r"^\s*(?:мои\s+шаблоны|список\s+шаблонов|покажи\s+шаблоны|шаблоны)\s*[.!?]*\s*$", re.I)
-_CREATE = re.compile(r"^\s*(?:создай|сохрани|добавь)\s+шаблон\s+(?P<name>[^\n:;]{1,30}?)\s*[:\-]\s*(?P<items>.+)$", re.I | re.S)
-_DELETE = re.compile(r"^\s*(?:удали|забудь)\s+шаблон\s+(?P<name>[^\n]{1,30}?)\s*[.!]*\s*$", re.I)
+_RUN = re.compile(r"^\s*(?:запусти\s+|выполни\s+|включи\s+|run\s+|start\s+|execute\s+|виконай\s+|увімкни\s+)?(?:шаблон|template)\s+(?P<name>[^\n:;]{1,30}?)\s*[.!]*\s*$", re.I)
+_LIST = re.compile(r"^\s*(?:мои\s+шаблоны|список\s+шаблонов|покажи\s+шаблоны|шаблоны|my\s+templates|list\s+(?:of\s+)?templates|show\s+(?:my\s+)?templates|templates|мої\s+шаблони|список\s+шаблонів|покажи\s+шаблони|шаблони)\s*[.!?]*\s*$", re.I)
+_CREATE = re.compile(r"^\s*(?:создай|сохрани|добавь|create|save|add|створи|збережи|додай)\s+(?:шаблон|template)\s+(?P<name>[^\n:;]{1,30}?)\s*[:\-]\s*(?P<items>.+)$", re.I | re.S)
+_DELETE = re.compile(r"^\s*(?:удали|забудь|delete|remove|forget|видали)\s+(?:шаблон|template)\s+(?P<name>[^\n]{1,30}?)\s*[.!]*\s*$", re.I)
 
 
 def user_templates() -> dict:
     d = atomic_io.read_json(PATH, {})
     return d if isinstance(d, dict) else {}
+
+
+_ALIASES = {"morning": "утро", "ранок": "утро", "work": "работа", "робота": "работа", "break": "перерыв", "перерва": "перерыв",
+            "quiet": "тишина", "silence": "тишина", "тиша": "тишина", "evening": "вечер", "вечір": "вечер"}
 
 
 def all_templates() -> dict:
@@ -65,6 +69,7 @@ def try_template_plan(command: str):
     if not m:
         return None
     name = m.group("name").strip().lower()
+    name = _ALIASES.get(name, name)
     items = all_templates().get(name)
     if not items:
         return None
