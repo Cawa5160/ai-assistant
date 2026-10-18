@@ -878,6 +878,8 @@ TR = {
     'Сделать звук громче': 'Turn volume up',
     'Сделать звук тише': 'Turn volume down',
     'Выключить / включить звук': 'Mute / unmute',
+    '⏳ Думаю… (локальная модель при первом вопросе загружается — до минуты)': '⏳ Thinking… (the local model loads on the first question — up to a minute)',
+    'Ollama не отвечает или модель слишком долго отвечает — проверь значок Ollama в трее и повтори.': 'Ollama is not responding or the model is taking too long — check the Ollama tray icon and try again.',
 }
 
 FRAG = {

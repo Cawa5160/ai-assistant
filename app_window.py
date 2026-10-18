@@ -514,12 +514,18 @@ class AppWindow:
             self.root.after(2000, lambda: self._chat_poll_result(baseline, len(self._chat_turns) - 1, 0))
         else:
             self._chat_turns.append({"role": "user", "text": text})
-            self._chat_turns.append({"role": "assistant", "text": "…"})
+            self._chat_turns.append({"role": "assistant", "text": "⏳ Думаю… (локальная модель при первом вопросе загружается — до минуты)" if self._chat_backend_is_local() else "…"})
             idx = len(self._chat_turns) - 1
             asked = [dict(t) for t in self._chat_turns[:idx] if not t["text"].startswith("▶ ")
                      and not t["text"].startswith("Запускаю команду")]
             self.c.chat_ask(asked, lambda answer, ok, i=idx: ui_thread.post(self._chat_set_answer, i, answer))
         self._refresh_chat()
+
+    def _chat_backend_is_local(self):
+        try:
+            return config.get("chat_backend") == "ollama"
+        except Exception:
+            return False
 
     def _chat_set_answer(self, idx, answer):
         if idx < len(self._chat_turns):

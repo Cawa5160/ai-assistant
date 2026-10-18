@@ -108,16 +108,25 @@ def recommend(hw: dict, sizes: dict, notes: dict = None) -> list:
     return rows
 
 
-def chat(model: str, turns: list, system: str = "", timeout: float = 180.0) -> str:
+def chat(model: str, turns: list, system: str = "", timeout: float = 300.0) -> str:
     """turns: [{'role': 'user'|'assistant', 'text'}]. Ответ локальной модели или RuntimeError."""
+    import re as _re
     messages = ([{"role": "system", "content": system}] if system else []) + \
                [{"role": t["role"], "content": t["text"]} for t in turns]
+    body = {"model": model, "messages": messages, "stream": False,
+            "think": False,                                   # Qwen3 и др. не «думают» минутами перед ответом
+            "keep_alive": "30m",                              # не выгружать модель между вопросами
+            "options": {"num_ctx": 4096, "num_predict": 1024}}  # маленький контекст — модель целиком в видеопамяти
     try:
-        r = requests.post(OLLAMA + "/api/chat", json={"model": model, "messages": messages, "stream": False},
-                          timeout=timeout)
+        r = requests.post(OLLAMA + "/api/chat", json=body, timeout=timeout)
+        if r.status_code == 400 and "think" in r.text.lower():   # старая Ollama не знает параметр think
+            body.pop("think")
+            r = requests.post(OLLAMA + "/api/chat", json=body, timeout=timeout)
     except requests.exceptions.RequestException as e:
-        raise RuntimeError("Ollama не отвечает — запусти её (значок в трее) и повтори.") from e
+        raise RuntimeError("Ollama не отвечает или модель слишком долго отвечает — проверь значок Ollama в трее и повтори.") from e
     if r.status_code == 404:
         raise RuntimeError(f"Модель «{model}» не скачана. В консоли: ollama pull {model}")
     r.raise_for_status()
-    return (r.json().get("message", {}).get("content") or "").strip() or "Модель ничего не ответила."
+    text = (r.json().get("message", {}).get("content") or "")
+    text = _re.sub(r"<think>.*?</think>", "", text, flags=_re.S).strip()
+    return text or "Модель ничего не ответила."
