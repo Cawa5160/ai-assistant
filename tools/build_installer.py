@@ -30,7 +30,7 @@ FILES_TO_EMBED = [
     "assets/app.ico", "assets/logo_128.png", "assets/logo_64.png",
 ]
 
-APP_VERSION_LABEL = "1.32.2"
+APP_VERSION_LABEL = "2.0.0"
 SUBDIRS = sorted({os.path.dirname(p) for p in FILES_TO_EMBED if "/" in p})
 
 
