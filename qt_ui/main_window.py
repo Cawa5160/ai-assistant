@@ -5,6 +5,8 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QStackedWidget, QVBoxLayout, 
 
 from .backend import StubBackend
 from .pages import ChatPage, HomePage, PlaceholderPage
+from .memory_page import MemoryPage
+from .settings_page import SettingsPage
 from .pages_more import DiagPage, HistoryPage, SchedulePage
 from .theme_manager import theme
 from .widgets import IconButton, NavButton, StatusDot, T, Tile, label
@@ -14,7 +16,7 @@ NAV = [("home", "home", "Главная"), ("chat", "sparkles", "Ассисте�
        ("settings", "sliders", "Настройки"), ("diag", "pulse", "Проверка системы")]
 
 
-CLASSIC = {"macros": "memory", "settings": "settings"}      # эти страницы ещё в прежнем окне
+CLASSIC = {}      # все страницы уже в новом окне (прежнее окно остаётся для диалогов и автопилота)
 
 
 class MainWindow(QWidget):
@@ -53,7 +55,8 @@ class MainWindow(QWidget):
         self.home = HomePage(self.backend)
         self.chat = ChatPage(self.backend)
         widgets = {"home": self.home, "chat": self.chat, "history": HistoryPage(self.backend),
-                   "schedule": SchedulePage(self.backend), "diag": DiagPage(self.backend)}
+                   "schedule": SchedulePage(self.backend), "diag": DiagPage(self.backend),
+                   "macros": MemoryPage(self.backend), "settings": SettingsPage(self.backend)}
         for key, icon_name, title in NAV:
             btn = NavButton(icon_name, title)
             btn.clicked.connect(lambda _=False, k=key: self._nav(k))
@@ -84,6 +87,9 @@ class MainWindow(QWidget):
 
         outer.addWidget(side)
         outer.addWidget(self.pages, 1)
+        settings = widgets["settings"]
+        settings.saved.connect(self._settings_saved)
+        settings.language_changed.connect(self._language_changed)
         self.setAcceptDrops(True)
         self.home.command.connect(self._home_command)
         self.home.voice_requested.connect(self.backend.voice)
@@ -140,6 +146,16 @@ class MainWindow(QWidget):
         self.chat.mode._btns["run"].setChecked(True)
         self.chat.send(text)
         self.chat.mode._btns["ask"].setChecked(True)
+
+    def _settings_saved(self, values):
+        name = values.get("ui_theme")
+        if name in ("dark", "light") and name != theme.name:
+            theme.set(name, self._app())
+
+    def _language_changed(self, code):
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.information(self, T("Язык интерфейса"),
+                                T("Язык применится после перезапуска программы: закрой её через значок в трее («Выход») и запусти снова."))
 
     def _file_tools(self):
         from .file_tools import FileToolsDialog

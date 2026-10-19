@@ -3,11 +3,19 @@ import time
 
 from PySide6.QtCore import QTimer
 
+from .memory_backend import MemoryBackend, StubMemory
 from .more_backend import MoreBackend, StubMore
+from .settings_backend import SettingsBackend, StubSettings
 
 
-class StubBackend(StubMore):
+class StubBackend(StubMore, StubMemory, StubSettings):
     version = "2.0.0"
+
+    def __init__(self):
+        if hasattr(StubMore, "__init__") and StubMore.__init__ is not object.__init__:
+            StubMore.__init__(self)
+        StubMemory.__init__(self)
+        StubSettings.__init__(self)
 
     def status(self) -> dict:
         return {"ready": True, "text": "Готов к работе", "detail": "Gemini · 5 ключей · лимитов нет",
@@ -55,7 +63,7 @@ class StubBackend(StubMore):
         pass
 
 
-class RealBackend(MoreBackend):
+class RealBackend(MoreBackend, MemoryBackend, SettingsBackend):
     """Связь с настоящей программой: Controller из main.py (команды, чат), history, config."""
 
     def __init__(self, controller, post, open_classic):
