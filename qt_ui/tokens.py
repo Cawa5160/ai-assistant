@@ -66,6 +66,21 @@ QFrame#attach[bad="true"] { border: 1px solid $err; }
 QDialog#dlg { background: $card; }
 QFrame#warnbox { background: $sel; border: 1px solid $selb; border-radius: 12px; }
 QCheckBox { color: $text; spacing: 8px; }
+QCheckBox::indicator { width: 16px; height: 16px; border-radius: 5px; border: 1px solid $mut; background: transparent; }
+QCheckBox::indicator:checked { background: $acc; border: 1px solid $acc; }
+QPushButton#danger { color: $err; font-weight: 600; padding: 9px 18px; border-radius: 12px; border: 1px solid $err; }
+QPushButton#danger:hover { background: $hover; }
+QPushButton#success { color: white; font-weight: 600; padding: 9px 18px; border-radius: 12px; background: $ok; }
+QPushButton#neutral { color: $text; font-weight: 600; padding: 9px 18px; border-radius: 12px; background: $seg; border: 1px solid $line; }
+QPushButton#neutral:hover { border: 1px solid $acc; }
+QPushButton#stop { color: white; font-weight: 700; padding: 0 14px; background: #b91c1c; border-radius: 0; }
+QPushButton#barbtn { color: white; font-weight: 600; padding: 0 12px; background: rgba(255,255,255,40); border-radius: 0; }
+QPushButton#barbtn:hover { background: rgba(255,255,255,70); }
+QFrame#bar { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 $acc, stop:1 $acc2); border-radius: 12px; }
+QLabel#bartext { color: white; font-weight: 600; }
+QPlainTextEdit#log, QTextEdit#log { background: $side; border: 1px solid $line; border-radius: 10px; padding: 8px; color: $text; font-family: Consolas, "Cascadia Mono", monospace; font-size: 13px; }
+QLabel#warn { color: $warn; }
+QLabel#err { color: $err; }
 QToolTip { background: $card; color: $text; border: 1px solid $line; padding: 5px 8px; border-radius: 6px; }
 """)
 

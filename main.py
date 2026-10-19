@@ -994,7 +994,7 @@ def _create_ui(controller):
         try:
             from qt_ui import runtime
             if runtime.available():
-                return runtime.QtShell(controller, lambda: runtime.start_tk_thread(controller))
+                return runtime.QtShell(controller)
             log("PySide6 не установлен — работает прежний интерфейс.")
         except Exception as e:
             log(f"Новый интерфейс не запустился ({type(e).__name__}: {e}) — работает прежний.")

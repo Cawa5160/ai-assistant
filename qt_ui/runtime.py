@@ -37,7 +37,9 @@ class _Bridge(QObject):
 class QtShell:
     """Подставляется вместо app_window.AppWindow в main.py: те же show/refresh/set_busy/quit/run."""
 
-    def __init__(self, controller, tk_factory):
+    def __init__(self, controller, tk_factory=None):
+        import i18n
+        i18n.load_language()
         self.app = QApplication.instance() or QApplication([])
         self.app.setQuitOnLastWindowClosed(False)
         font = QFont()
@@ -46,8 +48,10 @@ class QtShell:
         self.app.setFont(font)
         theme.set(config.get("ui_theme") or "dark", self.app)
         self.bridge = _Bridge()
-        self.tk = tk_factory()              # поднимает Tk в своём потоке (см. start())
+        self.tk = tk_factory() if tk_factory else None     # прежнее окно Tk больше не нужно: диалоги и все страницы на Qt
         self.backend = RealBackend(controller, self.post, self.open_classic)
+        from . import dialogs_qt
+        dialogs_qt.install(self.post)        # gui.ask_yes_no, confirm_plan, окно автопилота… -> версии на Qt
         self.window = MainWindow(self.backend)
         self.window.theme_saved.connect(lambda name: config.save({"ui_theme": name}))
         self._visible = False
@@ -85,10 +89,9 @@ class QtShell:
 
     def show(self, page=None):
         def go():
-            if page and page in ("home", "chat"):
-                self.window.show_page(page)
-            elif page:
-                self.open_classic(page)
+            key = {"memory": "macros"}.get(page, page)
+            if key in self.window.index:
+                self.window.show_page(key)
             self._visible = True
             self.window.showNormal()
             self.window.raise_()
@@ -100,10 +103,11 @@ class QtShell:
 
     def set_busy(self, busy, text=""):
         self.post(lambda: self.window.set_busy(busy, text))
-        try:
-            self.tk.set_busy(busy, text)
-        except Exception:
-            pass
+        if self.tk is not None:
+            try:
+                self.tk.set_busy(busy, text)
+            except Exception:
+                pass
 
     def hide_for_agent(self):
         """Прячет оба окна на время автопилота (ИИ не должен видеть приложение на скриншоте)."""
@@ -111,10 +115,11 @@ class QtShell:
             self._visible_before_agent = self.window.isVisible()
             self.window.hide()
         self._call(go)
-        try:
-            self.tk.hide_for_agent()
-        except Exception:
-            pass
+        if self.tk is not None:
+            try:
+                self.tk.hide_for_agent()
+            except Exception:
+                pass
 
     def restore_after_agent(self):
         def go():
@@ -122,21 +127,24 @@ class QtShell:
                 self.window.show()
             self._visible_before_agent = False
         self.post(go)
-        try:
-            self.tk.restore_after_agent()
-        except Exception:
-            pass
+        if self.tk is not None:
+            try:
+                self.tk.restore_after_agent()
+            except Exception:
+                pass
 
     def quit(self):
         self.post(self.app.quit)
-        try:
-            self.tk.quit()
-        except Exception:
-            pass
+        if self.tk is not None:
+            try:
+                self.tk.quit()
+            except Exception:
+                pass
 
     def open_classic(self, page):
-        import ui_thread
-        ui_thread.post(self.tk.show, page)
+        if self.tk is not None:
+            import ui_thread
+            ui_thread.post(self.tk.show, page)
 
 
 def start_tk_thread(controller):
