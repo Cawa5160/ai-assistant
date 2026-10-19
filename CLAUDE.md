@@ -33,7 +33,7 @@ Tkinter-ассистент: пишешь/говоришь команду → Gem
 1. Править код; `python -m unittest discover -s tests` (44 теста, Windows не нужен).
 2. Поднять версию в `config.py` (`APP_VERSION`) и `tools/build_installer.py` (`APP_VERSION_LABEL`), записать в `CHANGELOG.md`.
 3. `python tools/build_installer.py` → `python tools/verify_installer.py`.
-4. Коммит с строками Co-Authored-By/Claude-Session, push, отправить `.bat` пользователю.
+4. Коммит с строками Co-Authored-By/Claude-Session (локально), отправить `.bat` пользователю файлом. На GitHub не пушить, пока пользователь не попросит (19.10.2026).
 Новые модули добавлять в `FILES_TO_EMBED` в `tools/build_installer.py`.
 
 ## Решения пользователя (не предлагать заново)
