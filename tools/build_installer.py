@@ -25,12 +25,14 @@ FILES_TO_EMBED = [
     "notifications.py", "quick_commands.py", "quick_actions.py", "macros.py", "telegram_bot.py", "media_input.py", "clipboard_tools.py", "backup.py", "templates.py", "wakeword.py", "mouse.py", "app_profiles.py", "audit.py", "updater.py", "ui_elements.py", "ui_kit.py", "chat.py", "hardware.py", "local_llm.py", "i18n.py", "lang_en.py", "lang_uk.py", "plan_validator.py", "privacy.py", "scheduler.py",
     "screen_utils.py", "secure_store.py", "shortcuts.py", "single_instance.py", "theme.py",
     "ui_thread.py", "voice_input.py", "voice_output.py",
+    "qt_ui/__init__.py", "qt_ui/tokens.py", "qt_ui/icons.py", "qt_ui/theme_manager.py", "qt_ui/widgets.py",
+    "qt_ui/pages.py", "qt_ui/main_window.py", "qt_ui/backend.py", "qt_ui/runtime.py", "qt_ui/preview.py",
     "requirements.txt", "README.md", "CHANGELOG.md", "LICENSE",
     "start.bat", "uninstall.bat", "cleanup.py", "build_exe.bat",
     "assets/app.ico", "assets/logo_128.png", "assets/logo_64.png",
 ]
 
-APP_VERSION_LABEL = "2.0.0"
+APP_VERSION_LABEL = "2.1.0"
 SUBDIRS = sorted({os.path.dirname(p) for p in FILES_TO_EMBED if "/" in p})
 
 

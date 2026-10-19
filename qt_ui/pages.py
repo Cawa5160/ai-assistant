@@ -32,6 +32,7 @@ class PlaceholderPage(QWidget):
 
 class HomePage(QWidget):
     command = Signal(str)
+    voice_requested = Signal()
 
     CHIPS = [("camera", "Скриншот", "сделай скриншот"), ("timer", "Таймер 10 минут", "поставь таймер на 10 минут"),
              ("globe", "Открыть браузер", "открой браузер"), ("note", "Блокнот", "открой блокнот"),
@@ -62,6 +63,7 @@ class HomePage(QWidget):
         row.addWidget(label("Ctrl K", "small"))
         mic = IconButton("mic", "mut", size=20)
         mic.setToolTip(T("Команда голосом"))
+        mic.clicked.connect(self.voice_requested)
         row.addWidget(mic)
         lay.addWidget(self.cmd)
         lay.addSpacing(14)
@@ -70,7 +72,7 @@ class HomePage(QWidget):
         chips.setSpacing(8)
         for icon_name, text, cmd in self.CHIPS:
             b = IconButton(icon_name, "mut", size=16, text="  " + text, object_name="chip")
-            b.clicked.connect(lambda _=False, c=cmd: self.command.emit(c) if c else None)
+            b.clicked.connect(lambda _=False, c=cmd: self.command.emit(c) if c else self.voice_requested.emit())
             chips.addWidget(b)
         chips.addStretch(1)
         lay.addLayout(chips)
@@ -99,6 +101,7 @@ class HomePage(QWidget):
         sl.addLayout(top)
         sl.addSpacing(14)
         self.voice = IconButton("mic", "white", size=18, text="  Команда голосом", object_name="primary")
+        self.voice.clicked.connect(self.voice_requested)
         sl.addWidget(self.voice, 0, Qt.AlignLeft)
         grid.addWidget(st, 0, 0)
 
@@ -144,7 +147,8 @@ class HomePage(QWidget):
         self.st_title.setText(T(s["text"]))
         self.st_detail.setText(T(s["detail"]))
         self.big.setText(str(s["done_today"]))
-        self.big_sub.setText(T("задач выполнено") + "\n" + T("за") + f" {s['minutes_today']} " + T("мин автопилота"))
+        extra = ("\n" + T("за") + f" {s['minutes_today']} " + T("мин автопилота")) if s.get("minutes_today") else ""
+        self.big_sub.setText(T("задач выполнено") + extra)
         while self.rl.count() > 1:
             item = self.rl.takeAt(1)
             if item.widget():
@@ -205,7 +209,8 @@ class ChatPage(QWidget):
         self.attach.clicked.connect(self._attach)
         bar.addWidget(self.attach)
         self.mode = Segmented([("ask", "Спросить"), ("run", "Выполнить")], "ask")
-        self.engine = Segmented([("gemini", "Gemini"), ("ollama", "Локально")], "gemini")
+        self.engine = Segmented([("gemini", "Gemini"), ("ollama", "Локально")], getattr(backend, "engine", "gemini"))
+        self.engine.changed.connect(self._engine_changed)
         bar.addWidget(self.mode)
         bar.addWidget(self.engine)
         bar.addStretch(1)
@@ -217,6 +222,13 @@ class ChatPage(QWidget):
         bar.addWidget(self.send_btn)
         bl.addLayout(bar)
         lay.addWidget(self.box)
+
+    def _engine_changed(self, name):
+        """У каждой модели своя переписка (как в старом окне)."""
+        self.backend.set_engine(name)
+        self.clear()
+        for t in self.backend.history_of(name):
+            self.add_message("user" if t["role"] == "user" else "assistant", t["text"])
 
     def _focus(self, on):
         self.box.setProperty("focus", on)

@@ -1,5 +1,5 @@
 """Главное окно: боковое меню + страницы, переключение тёмной/светлой темы."""
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QShortcut, QKeySequence
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
 
@@ -13,7 +13,13 @@ NAV = [("home", "home", "Главная"), ("chat", "sparkles", "Ассисте�
        ("settings", "sliders", "Настройки"), ("diag", "pulse", "Проверка системы")]
 
 
+CLASSIC = {"history": "history", "schedule": "schedule", "macros": "memory", "settings": "settings", "diag": "diag"}
+
+
 class MainWindow(QWidget):
+    theme_saved = Signal(str)
+    closing = Signal()
+
     def __init__(self, backend=None):
         super().__init__()
         self.backend = backend or StubBackend()
@@ -48,7 +54,7 @@ class MainWindow(QWidget):
         widgets = {"home": self.home, "chat": self.chat}
         for key, icon_name, title in NAV:
             btn = NavButton(icon_name, title)
-            btn.clicked.connect(lambda _=False, k=key: self.show_page(k))
+            btn.clicked.connect(lambda _=False, k=key: self._nav(k))
             sl.addWidget(btn)
             self.nav[key] = btn
             page = widgets.get(key) or PlaceholderPage(title)
@@ -60,10 +66,12 @@ class MainWindow(QWidget):
         st = QHBoxLayout(status)
         st.setContentsMargins(14, 12, 14, 12)
         st.setSpacing(10)
-        st.addWidget(StatusDot(), 0, Qt.AlignTop)
+        self.status_dot = StatusDot()
+        st.addWidget(self.status_dot, 0, Qt.AlignTop)
         col = QVBoxLayout()
         col.setSpacing(2)
-        col.addWidget(label("Готов к работе", "ok"))
+        self.status_label = label("Готов к работе", "ok")
+        col.addWidget(self.status_label)
         col.addWidget(label(f"v{self.backend.version} · " + T("в фоне"), "small", translate=False))
         st.addLayout(col, 1)
         self.theme_btn = IconButton("sun", "mut", size=18)
@@ -75,6 +83,7 @@ class MainWindow(QWidget):
         outer.addWidget(side)
         outer.addWidget(self.pages, 1)
         self.home.command.connect(self._home_command)
+        self.home.voice_requested.connect(self.backend.voice)
         QShortcut(QKeySequence("Ctrl+K"), self, activated=self._focus_command)
         theme.changed.connect(self._theme_changed)
         self.show_page("home")
@@ -82,9 +91,32 @@ class MainWindow(QWidget):
     def show_page(self, key):
         self.nav[key].setChecked(True)
         self.pages.setCurrentIndex(self.index[key])
+        self.current = key
         if key == "home":
             self.home.refresh()
 
+    def _nav(self, key):
+        """Страницы, которые ещё не переехали, открываются в классическом окне; здесь остаётся прежняя страница."""
+        if key in CLASSIC and getattr(self.backend, "has_classic", False):
+            self.nav[getattr(self, "current", "home")].setChecked(True)
+            self.backend.open_classic(CLASSIC[key])
+        else:
+            self.show_page(key)
+
+    def refresh(self):
+        if getattr(self, "current", "") == "home":
+            self.home.refresh()
+
+    def set_busy(self, busy, text=""):
+        self.status_label.setText(T("Выполняется…") if busy else T("Готов к работе"))
+        self.status_dot.set_role("warn" if busy else "ok")
+        if not busy:
+            self.refresh()
+
+    def closeEvent(self, event):
+        event.ignore()          # крестик прячет окно, программа остаётся в трее
+        self.hide()
+        self.closing.emit()
     def _home_command(self, text):
         self.show_page("chat")
         self.chat.mode._btns["run"].setChecked(True)
@@ -97,6 +129,7 @@ class MainWindow(QWidget):
 
     def toggle_theme(self):
         theme.set("light" if theme.name == "dark" else "dark", self._app())
+        self.theme_saved.emit(theme.name)
 
     def _theme_changed(self, name):
         self.theme_btn._name = "sun" if name == "dark" else "moon"

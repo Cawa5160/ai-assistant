@@ -987,6 +987,20 @@ def _startup(background: bool):
         log("Запуск в фоне (--background): окно скрыто, значок в трее.")
 
 
+def _create_ui(controller):
+    """Новый интерфейс (Qt), если включён и PySide6 есть; иначе прежний на Tk. Параметр --tk / --qt перекрывает настройку."""
+    want = "tk" if "--tk" in sys.argv else "qt" if "--qt" in sys.argv else (config.get("ui_engine") or "qt")
+    if want == "qt":
+        try:
+            from qt_ui import runtime
+            if runtime.available():
+                return runtime.QtShell(controller, lambda: runtime.start_tk_thread(controller))
+            log("PySide6 не установлен — работает прежний интерфейс.")
+        except Exception as e:
+            log(f"Новый интерфейс не запустился ({type(e).__name__}: {e}) — работает прежний.")
+    return app_window.AppWindow(controller)
+
+
 def main():
     global _app
     background = "--background" in sys.argv
@@ -1000,7 +1014,7 @@ def main():
     backup.restore_secrets()         # ключи/токен пропали (чистка, новая папка) — вернуть из резерва
     backup.full_snapshot()
     try:
-        _app = app_window.AppWindow(Controller())
+        _app = _create_ui(Controller())
         single_instance.start_listener(lambda: ui_thread.post(_app.show))
         register_hotkeys()
         icon = setup_tray()
@@ -1015,7 +1029,7 @@ def main():
         ui_thread.shutdown()
         single_instance.release()
         try:
-            if _app is not None:
+            if _app is not None and hasattr(_app, "root"):
                 _app.root.destroy()
         except Exception as _e:
             log(f"main.py:978: {type(_e).__name__}: {_e}")
