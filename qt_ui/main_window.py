@@ -82,11 +82,23 @@ class MainWindow(QWidget):
 
         outer.addWidget(side)
         outer.addWidget(self.pages, 1)
+        self.setAcceptDrops(True)
         self.home.command.connect(self._home_command)
         self.home.voice_requested.connect(self.backend.voice)
         QShortcut(QKeySequence("Ctrl+K"), self, activated=self._focus_command)
         theme.changed.connect(self._theme_changed)
         self.show_page("home")
+
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls():
+            e.acceptProposedAction()
+
+    def dropEvent(self, e):
+        paths = [u.toLocalFile() for u in e.mimeData().urls() if u.isLocalFile()]
+        if paths:
+            self.show_page("chat")
+            self.chat.add_files(paths)
+            e.acceptProposedAction()
 
     def show_page(self, key):
         self.nav[key].setChecked(True)

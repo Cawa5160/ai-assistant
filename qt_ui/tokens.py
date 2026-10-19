@@ -61,6 +61,11 @@ QScrollBar::handle:vertical { background: $line; border-radius: 4px; min-height:
 QScrollBar::handle:vertical:hover { background: $mut; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+QFrame#attach { background: $hover; border: 1px solid $line; border-radius: 10px; }
+QFrame#attach[bad="true"] { border: 1px solid $err; }
+QDialog#dlg { background: $card; }
+QFrame#warnbox { background: $sel; border: 1px solid $selb; border-radius: 12px; }
+QCheckBox { color: $text; spacing: 8px; }
 QToolTip { background: $card; color: $text; border: 1px solid $line; padding: 5px 8px; border-radius: 6px; }
 """)
 

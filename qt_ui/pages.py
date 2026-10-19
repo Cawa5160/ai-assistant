@@ -1,4 +1,5 @@
 """Страницы окна: Главная и Ассистент (чат). Остальные страницы пока — заглушки."""
+import os
 import time
 
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -7,6 +8,8 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QScrollAr
 
 import i18n
 
+from .attachments import AttachTray, save_clipboard_image
+from .dialogs import ask_consent
 from .theme_manager import theme
 from .widgets import (AutoTextEdit, Card, IconButton, MessageRow, Segmented, StatusDot, T, label, repolish)
 
@@ -103,6 +106,9 @@ class HomePage(QWidget):
         self.voice = IconButton("mic", "white", size=18, text="  Команда голосом", object_name="primary")
         self.voice.clicked.connect(self.voice_requested)
         sl.addWidget(self.voice, 0, Qt.AlignLeft)
+        self.revoke = IconButton("shield", "mut", size=16, text="  Отозвать согласие на отправку файлов", object_name="ghost")
+        self.revoke.clicked.connect(self._revoke)
+        sl.addWidget(self.revoke, 0, Qt.AlignLeft)
         grid.addWidget(st, 0, 0)
 
         today = Card()
@@ -129,6 +135,10 @@ class HomePage(QWidget):
         lay.addStretch(1)
         self.refresh()
 
+    def _revoke(self):
+        self.backend.revoke_consent()
+        self.refresh()
+
     def _submit(self):
         text = self.field.text().strip()
         if text:
@@ -142,6 +152,7 @@ class HomePage(QWidget):
         h = int(time.strftime("%H"))
         hello = "Доброе утро" if 5 <= h < 12 else "Добрый день" if 12 <= h < 18 else "Добрый вечер" if 18 <= h < 23 else "Доброй ночи"
         self.greeting.setText(T(hello) + " 👋")
+        self.revoke.setVisible(self.backend.consent_given())
         s = self.backend.status()
         self.dot.set_role("ok" if s["ready"] else "warn")
         self.st_title.setText(T(s["text"]))
@@ -201,6 +212,10 @@ class ChatPage(QWidget):
         self.edit = AutoTextEdit("Напиши вопрос или команду…")
         self.edit.submitted.connect(self.send)
         self.edit.focus_changed.connect(self._focus)
+        self.tray = AttachTray()
+        bl.addWidget(self.tray)
+        self.edit.files_pasted.connect(self.add_files)
+        self.edit.image_pasted.connect(self._paste_image)
         bl.addWidget(self.edit)
         bar = QHBoxLayout()
         bar.setSpacing(10)
@@ -235,7 +250,17 @@ class ChatPage(QWidget):
         repolish(self.box)
 
     def _attach(self):
-        QFileDialog.getOpenFileNames(self, T("Прикрепить файл или фото"))
+        paths, _ = QFileDialog.getOpenFileNames(self, T("Прикрепить файл или фото"), "",
+                                                T("Все файлы") + " (*.*)")
+        self.add_files(paths)
+
+    def add_files(self, paths):
+        self.tray.add(paths)
+        self.edit.setFocus()
+
+    def _paste_image(self, img):
+        self.tray.add([save_clipboard_image(img)], temp=True)
+        self.edit.setFocus()
 
     def add_message(self, role, text, meta=""):
         row = MessageRow(role, text, meta)
@@ -251,16 +276,29 @@ class ChatPage(QWidget):
 
     def send(self, text=None):
         text = (text if isinstance(text, str) else self.edit.toPlainText()).strip()
-        if not text or self._pending is not None:
+        files = self.tray.paths()
+        if (not text and not files) or self._pending is not None:
             return
-        self.edit.clear()
         mode = "run" if self.mode._btns["run"].isChecked() else "ask"
         engine = "ollama" if self.engine._btns["ollama"].isChecked() else "gemini"
-        self.add_message("user", ("▶ " if mode == "run" else "") + text)
+        if files:
+            mode = "ask"                       # файлы обрабатываются только в режиме «Спросить»
+            if self.backend.needs_consent(engine, files):
+                answer = ask_consent([os.path.basename(f) for f in files], self.window())
+                if not answer:
+                    return
+                if answer == "always":
+                    self.backend.remember_consent()
+        self.edit.clear()
+        shown = ("▶ " if mode == "run" else "") + text
+        if files:
+            shown = (shown + "\n" if shown else "") + "📎 " + ", ".join(os.path.basename(f) for f in files)
+        self.add_message("user", shown)
         self._pending = self.add_message("assistant", T("Думаю…"))
 
         def done(answer, meta=""):
             row, self._pending = self._pending, None
             if row:
                 row.set_text(answer, meta)
-        self.backend.ask(text, mode, engine, done)
+        self.backend.ask(text, mode, engine, done, attachments=files)
+        self.tray.clear()

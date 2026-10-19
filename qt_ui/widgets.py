@@ -213,6 +213,21 @@ class AutoTextEdit(QTextEdit):
         lines = min(6, max(1, int(self.document().size().height() / max(1, self.fontMetrics().lineSpacing()))))
         self.setFixedHeight(lines * self.fontMetrics().lineSpacing() + 14)
 
+    files_pasted = Signal(list)      # пути файлов (Ctrl+V из проводника)
+    image_pasted = Signal(object)    # QImage (Ctrl+V скриншота)
+
+    def canInsertFromMimeData(self, source):
+        return source.hasImage() or source.hasUrls() or super().canInsertFromMimeData(source)
+
+    def insertFromMimeData(self, source):
+        if source.hasUrls() and any(u.isLocalFile() for u in source.urls()):
+            self.files_pasted.emit([u.toLocalFile() for u in source.urls() if u.isLocalFile()])
+            return
+        if source.hasImage() and not source.hasText():
+            self.image_pasted.emit(source.imageData())
+            return
+        super().insertFromMimeData(source)
+
     def keyPressEvent(self, e):
         if e.key() in (Qt.Key_Return, Qt.Key_Enter) and not (e.modifiers() & Qt.ShiftModifier):
             self.submitted.emit()

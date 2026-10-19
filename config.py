@@ -13,11 +13,12 @@ BASE_DIR = DATA_DIR  # рядом со скриптом (или рядом с .e
 SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
 LOG_FILE = os.path.join(BASE_DIR, "action_log.txt")
 
-APP_VERSION = "2.1.0"
+APP_VERSION = "2.2.0"
 SETTINGS_VERSION = 2  # растёт, когда меняются значения по умолчанию, которые нужно применить и старым установкам
 
 DEFAULTS = {
     "ui_engine": "qt",   # "qt" — новый интерфейс (PySide6), "tk" — прежний; если PySide6 нет, автоматически tk
+    "cloud_files_consent": False,   # разрешил ли пользователь отправлять файлы/фото в облако (Gemini) без вопроса каждый раз
     "ui_theme": "dark",   # тема нового интерфейса: dark / light
     "gemini_api_keys": [],  # список ключей — по одному с каждого Google-аккаунта
     # Для навигации по экрану нужна модель посильнее lite-версии; gemini-3.5-flash бесплатна

@@ -280,5 +280,35 @@ class Release1322(unittest.TestCase):
             i18n.set_language("ru")
 
 
+class FilesIoTests(unittest.TestCase):
+    def test_redact_secrets(self):
+        import files_io
+        text, n = files_io.redact_secrets("пароль: abc123, ключ к решению, карта 4111 1111 1111 1111, номер 1234 5678 9012 3456")
+        self.assertEqual(n, 2)
+        self.assertIn("ключ к решению", text)
+        self.assertIn("1234 5678 9012 3456", text)
+        self.assertNotIn("abc123", text)
+
+    def test_docx_xlsx_text(self):
+        import files_io, tempfile, zipfile, os
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "a.docx")
+        with zipfile.ZipFile(p, "w") as z:
+            z.writestr("word/document.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Привет</w:t></w:r></w:p></w:body></w:document>')
+        self.assertEqual(files_io.extract_text(p)[0], "Привет")
+        x = os.path.join(d, "b.xlsx")
+        with zipfile.ZipFile(x, "w") as z:
+            z.writestr("xl/sharedStrings.xml", '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>Имя</t></si></sst>')
+            z.writestr("xl/worksheets/sheet1.xml", '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row><c t="s"><v>0</v></c><c><v>5</v></c></row></sheetData></worksheet>')
+        self.assertIn("Имя\t5", files_io.extract_text(x)[0])
+
+    def test_describe_unsupported(self):
+        import files_io, tempfile, os
+        p = os.path.join(tempfile.mkdtemp(), "a.rar")
+        open(p, "wb").write(b"x")
+        self.assertFalse(files_io.describe(p)["ok"])
+
+
+
 if __name__ == "__main__":
     unittest.main()

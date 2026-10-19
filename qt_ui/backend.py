@@ -15,8 +15,22 @@ class StubBackend:
         return [("Создать папку и файл", "готово", "14:02"), ("Поставь таймер на 10 минут", "готово", "14:03"),
                 ("Открой ютуб и найди музыку", "готово", "13:41")][:n]
 
-    def ask(self, text: str, mode: str, backend: str, on_done):
+    def needs_consent(self, engine, paths):
+        return bool(paths) and engine == "gemini" and not getattr(self, "_consent", False)
+
+    def remember_consent(self):
+        self._consent = True
+
+    def consent_given(self):
+        return getattr(self, "_consent", False)
+
+    def revoke_consent(self):
+        self._consent = False
+
+    def ask(self, text: str, mode: str, backend: str, on_done, attachments=()):
         """Ответ приходит позже (как у настоящей модели)."""
+        if attachments:
+            text = f"{text} (вложений: {len(attachments)})"
         QTimer.singleShot(900, lambda: on_done("Готово ✓ Выполнено: " + text if mode == "run" else
                                               "Это пример ответа ассистента на вопрос: «" + text + "»",
                                               time.strftime("%H:%M") + (" · Gemini" if backend == "gemini" else " · локально")))
@@ -87,8 +101,31 @@ class RealBackend:
     def history_of(self, engine):
         return list(self.turns.get(engine, []))
 
-    def ask(self, text, mode, engine, on_done):
+    # --- вложения ---
+    def needs_consent(self, engine, paths) -> bool:
+        """Файлы/фото уходят в облако только с согласием. Локальная модель читает текстовые файлы без отправки."""
+        import config
+        if not paths or engine != "gemini" or config.get("cloud_files_consent"):
+            return False
+        return True
+
+    def remember_consent(self):
+        import config
+        config.save({"cloud_files_consent": True})
+
+    def consent_given(self) -> bool:
+        import config
+        return bool(config.get("cloud_files_consent"))
+
+    def revoke_consent(self):
+        import config
+        config.save({"cloud_files_consent": False})
+
+    def ask(self, text, mode, engine, on_done, attachments=()):
         meta_engine = " · Gemini" if engine == "gemini" else " · локально"
+        if attachments:
+            self._ask_with_files(text, engine, list(attachments), on_done, meta_engine)
+            return
         if mode == "run":
             self._run(text, lambda answer: self.post(lambda: on_done(answer, time.strftime("%H:%M"))))
             return
@@ -100,6 +137,72 @@ class RealBackend:
             turns.append({"role": "assistant", "text": answer})
             self.post(lambda: on_done(answer, time.strftime("%H:%M") + meta_engine))
         self.controller.chat_ask(asked, got)
+
+    def _ask_with_files(self, text, engine, paths, on_done, meta_engine):
+        import threading
+        import files_io
+        import media_input
+        turns = self.turns.setdefault(engine, [])
+
+        def work():
+            notes, blocks, images, hidden = [], [], [], 0
+            question = text.strip()
+            try:
+                for p in paths:
+                    info = files_io.describe(p)
+                    if not info["ok"]:
+                        notes.append(f"«{info['name']}»: {info['reason']}")
+                        continue
+                    if info["kind"] == "image":
+                        if engine != "gemini":
+                            notes.append(f"«{info['name']}»: локальная модель не видит картинки — переключи на Gemini.")
+                        else:
+                            images.append((media_input.read_file(p), media_input.mime_of(p)))
+                    elif info["kind"] == "audio":
+                        if engine != "gemini":
+                            notes.append(f"«{info['name']}»: аудио распознаёт только Gemini.")
+                            continue
+                        said = media_input.transcribe(media_input.read_file(p), media_input.mime_of(p))
+                        blocks.append(f"Расшифровка аудио «{info['name']}»: {said}" if said else "")
+                    else:
+                        try:
+                            block, n, _cut = files_io.file_block(p)
+                            blocks.append(block)
+                            hidden += n
+                        except RuntimeError as e:
+                            notes.append(f"«{info['name']}»: {e}")
+                if not blocks and not images:
+                    self.post(lambda: on_done("\n".join(notes) or "Нечего отправлять.", ""))
+                    return
+                if images:
+                    q = question or "Опиши, что на картинке."
+                    if blocks:
+                        q = "\n\n".join(b for b in blocks if b) + "\n\n" + q
+                    answer = media_input.ask_images(images, q)
+                    turns.append({"role": "user", "text": (question or "Картинка") + f" [картинок: {len(images)}]"})
+                    turns.append({"role": "assistant", "text": answer})
+                else:
+                    ask_text = "\n\n".join(b for b in blocks if b) + "\n\n" + (question or "Кратко перескажи, что в файле.")
+                    turns.append({"role": "user", "text": ask_text})
+                    box = {}
+                    done = threading.Event()
+
+                    def got(answer, ok=True):
+                        box["a"] = answer
+                        done.set()
+                    self.controller.chat_ask([dict(t) for t in turns], got)
+                    done.wait(180)
+                    answer = box.get("a") or "Ответ не получен."
+                    turns.append({"role": "assistant", "text": answer})
+                tail = ""
+                if hidden:
+                    tail += f"\n\n🔒 Перед отправкой скрыто секретов: {hidden}."
+                if notes:
+                    tail += "\n\n" + "\n".join(notes)
+                self.post(lambda: on_done(answer + tail, time.strftime("%H:%M") + meta_engine))
+            except Exception as e:
+                self.post(lambda: on_done(f"Не получилось обработать файл: {e}", ""))
+        threading.Thread(target=work, daemon=True).start()
 
     def _run(self, text, finish):
         import threading
