@@ -3,8 +3,10 @@ import time
 
 from PySide6.QtCore import QTimer
 
+from .more_backend import MoreBackend, StubMore
 
-class StubBackend:
+
+class StubBackend(StubMore):
     version = "2.0.0"
 
     def status(self) -> dict:
@@ -53,7 +55,7 @@ class StubBackend:
         pass
 
 
-class RealBackend:
+class RealBackend(MoreBackend):
     """Связь с настоящей программой: Controller из main.py (команды, чат), history, config."""
 
     def __init__(self, controller, post, open_classic):

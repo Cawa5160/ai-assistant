@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QStackedWidget, QVBoxLayout, 
 
 from .backend import StubBackend
 from .pages import ChatPage, HomePage, PlaceholderPage
+from .pages_more import DiagPage, HistoryPage, SchedulePage
 from .theme_manager import theme
 from .widgets import IconButton, NavButton, StatusDot, T, Tile, label
 
@@ -13,7 +14,7 @@ NAV = [("home", "home", "Главная"), ("chat", "sparkles", "Ассисте�
        ("settings", "sliders", "Настройки"), ("diag", "pulse", "Проверка системы")]
 
 
-CLASSIC = {"history": "history", "schedule": "schedule", "macros": "memory", "settings": "settings", "diag": "diag"}
+CLASSIC = {"macros": "memory", "settings": "settings"}      # эти страницы ещё в прежнем окне
 
 
 class MainWindow(QWidget):
@@ -51,7 +52,8 @@ class MainWindow(QWidget):
         self.nav = {}
         self.home = HomePage(self.backend)
         self.chat = ChatPage(self.backend)
-        widgets = {"home": self.home, "chat": self.chat}
+        widgets = {"home": self.home, "chat": self.chat, "history": HistoryPage(self.backend),
+                   "schedule": SchedulePage(self.backend), "diag": DiagPage(self.backend)}
         for key, icon_name, title in NAV:
             btn = NavButton(icon_name, title)
             btn.clicked.connect(lambda _=False, k=key: self._nav(k))
@@ -85,6 +87,8 @@ class MainWindow(QWidget):
         self.setAcceptDrops(True)
         self.home.command.connect(self._home_command)
         self.home.voice_requested.connect(self.backend.voice)
+        self.home.file_tools_requested.connect(self._file_tools)
+        self.home.files_chosen.connect(lambda paths: (self.show_page("chat"), self.chat.add_files(paths)))
         QShortcut(QKeySequence("Ctrl+K"), self, activated=self._focus_command)
         theme.changed.connect(self._theme_changed)
         self.show_page("home")
@@ -106,6 +110,8 @@ class MainWindow(QWidget):
         self.current = key
         if key == "home":
             self.home.refresh()
+        elif hasattr(self.pages.currentWidget(), "refresh"):
+            self.pages.currentWidget().refresh()
 
     def _nav(self, key):
         """Страницы, которые ещё не переехали, открываются в классическом окне; здесь остаётся прежняя страница."""
@@ -134,6 +140,10 @@ class MainWindow(QWidget):
         self.chat.mode._btns["run"].setChecked(True)
         self.chat.send(text)
         self.chat.mode._btns["ask"].setChecked(True)
+
+    def _file_tools(self):
+        from .file_tools import FileToolsDialog
+        FileToolsDialog(self).exec()
 
     def _focus_command(self):
         self.show_page("home")

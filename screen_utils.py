@@ -16,6 +16,15 @@ def take_screenshot(max_width: int = 1280):
     почти на любом современном).
     """
     screenshot = pyautogui.screenshot()
+    try:                                  # перед отправкой в облако закрашиваем поля паролей
+        import screen_mask
+        screenshot = screen_mask.mask_screenshot(screenshot, get_screen_size())
+    except Exception as e:                # не вышло — отправляем как раньше
+        try:
+            from logger import log
+            log(f"Маскирование паролей не сработало: {type(e).__name__}")
+        except Exception:
+            pass
     scale = 1.0
 
     if screenshot.width > max_width:

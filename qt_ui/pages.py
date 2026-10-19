@@ -36,10 +36,12 @@ class PlaceholderPage(QWidget):
 class HomePage(QWidget):
     command = Signal(str)
     voice_requested = Signal()
+    files_chosen = Signal(list)
+    file_tools_requested = Signal()
 
     CHIPS = [("camera", "Скриншот", "сделай скриншот"), ("timer", "Таймер 10 минут", "поставь таймер на 10 минут"),
              ("globe", "Открыть браузер", "открой браузер"), ("note", "Блокнот", "открой блокнот"),
-             ("volume", "Громче", "громче"), ("mic", "Голос", "")]
+             ("volume", "Громче", "громче"), ("layers", "Файлы", "@files"), ("mic", "Голос", "")]
 
     def __init__(self, backend, parent=None):
         super().__init__(parent)
@@ -64,6 +66,10 @@ class HomePage(QWidget):
         self.field.returnPressed.connect(self._submit)
         row.addWidget(self.field, 1)
         row.addWidget(label("Ctrl K", "small"))
+        clip = IconButton("paperclip", "mut", size=20)
+        clip.setToolTip(T("Прикрепить файл или фото"))
+        clip.clicked.connect(self._attach)
+        row.addWidget(clip)
         mic = IconButton("mic", "mut", size=20)
         mic.setToolTip(T("Команда голосом"))
         mic.clicked.connect(self.voice_requested)
@@ -75,7 +81,7 @@ class HomePage(QWidget):
         chips.setSpacing(8)
         for icon_name, text, cmd in self.CHIPS:
             b = IconButton(icon_name, "mut", size=16, text="  " + text, object_name="chip")
-            b.clicked.connect(lambda _=False, c=cmd: self.command.emit(c) if c else self.voice_requested.emit())
+            b.clicked.connect(lambda _=False, c=cmd: self._chip(c))
             chips.addWidget(b)
         chips.addStretch(1)
         lay.addLayout(chips)
@@ -134,6 +140,19 @@ class HomePage(QWidget):
         lay.addWidget(self.recent)
         lay.addStretch(1)
         self.refresh()
+
+    def _chip(self, cmd):
+        if cmd == "@files":
+            self.file_tools_requested.emit()
+        elif cmd:
+            self.command.emit(cmd)
+        else:
+            self.voice_requested.emit()
+
+    def _attach(self):
+        paths, _ = QFileDialog.getOpenFileNames(self, T("Прикрепить файл или фото"), "", T("Все файлы") + " (*.*)")
+        if paths:
+            self.files_chosen.emit(paths)
 
     def _revoke(self):
         self.backend.revoke_consent()

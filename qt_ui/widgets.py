@@ -76,6 +76,9 @@ class Segmented(QFrame):
             lay.addWidget(b)
             self._btns[key] = b
 
+    def value(self):
+        return next((k for k, b in self._btns.items() if b.isChecked()), "")
+
     def set_value(self, key):
         if key in self._btns:
             self._btns[key].setChecked(True)

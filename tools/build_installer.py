@@ -26,13 +26,13 @@ FILES_TO_EMBED = [
     "screen_utils.py", "secure_store.py", "shortcuts.py", "single_instance.py", "theme.py",
     "ui_thread.py", "voice_input.py", "voice_output.py",
     "qt_ui/__init__.py", "qt_ui/tokens.py", "qt_ui/icons.py", "qt_ui/theme_manager.py", "qt_ui/widgets.py",
-    "qt_ui/pages.py", "qt_ui/main_window.py", "qt_ui/backend.py", "qt_ui/runtime.py", "qt_ui/attachments.py", "qt_ui/dialogs.py", "files_io.py", "qt_ui/preview.py",
+    "qt_ui/pages.py", "qt_ui/main_window.py", "qt_ui/backend.py", "qt_ui/runtime.py", "qt_ui/attachments.py", "qt_ui/pages_more.py", "qt_ui/more_backend.py", "qt_ui/file_ops_dialog.py", "qt_ui/file_tools.py", "file_ops.py", "screen_mask.py", "qt_ui/dialogs.py", "files_io.py", "qt_ui/preview.py",
     "requirements.txt", "README.md", "CHANGELOG.md", "LICENSE",
     "start.bat", "uninstall.bat", "cleanup.py", "build_exe.bat",
     "assets/app.ico", "assets/logo_128.png", "assets/logo_64.png",
 ]
 
-APP_VERSION_LABEL = "2.2.0"
+APP_VERSION_LABEL = "2.3.0"
 SUBDIRS = sorted({os.path.dirname(p) for p in FILES_TO_EMBED if "/" in p})
 
 
