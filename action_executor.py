@@ -313,10 +313,10 @@ def look(dx: int, dy: int):
     """Поворот камеры в играх. По горизонтали — стрелки ←/→ (в Roblox они крутят камеру с постоянной скоростью,
     так точнее, чем мышь); по вертикали — мышь. Режим 'mouse' в настройке game_camera_mode — всё мышью."""
     log(f"Поворачиваю камеру: dx={dx}, dy={dy}")
-    if str(config.get("game_camera_mode") or "keys") == "mouse":
+    if str(config.get("game_camera_mode") or "mouse") != "keys":
         return _look_mouse(dx, dy)
     if abs(dx) >= 8:
-        deg = abs(dx) * 0.3                           # 1 пиксель мыши ≈ 0.3°
+        deg = abs(dx) * float(config.get("game_deg_per_px") or 0.3)
         rate = float(config.get("game_camera_rate") or 90)   # °/с у стрелок
         hold_key("right" if dx > 0 else "left", max(0.05, min(deg / rate, 3.0)))
     if abs(dy) >= 8:

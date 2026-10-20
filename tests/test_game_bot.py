@@ -45,9 +45,9 @@ class GameBotTests(unittest.TestCase):
         import game_bot as g
         d = g.sanitize({"actions": [{"action": "go_to", "args": {"x": 900, "y": 500, "seconds": 2}}]}, 1920, 1080)
         self.assertEqual([x["action"] for x in d["steps"]], ["look", "hold_key"])
-        self.assertEqual(d["steps"][0]["args"]["dx"], 132)
+        self.assertEqual(d["steps"][0]["args"]["dx"], 266)   # atan2(400, 70) ≈ 80° → 266 px по 0.3°/px
         self.assertEqual(d["steps"][1]["args"], {"key": "w", "seconds": 2.0})
-        d = g.sanitize({"actions": [{"action": "go_to", "args": {"x": 510, "y": 500, "seconds": 9}}]}, 1920, 1080)
+        d = g.sanitize({"actions": [{"action": "go_to", "args": {"x": 500, "y": 100, "seconds": 9}}]}, 1920, 1080)
         self.assertEqual([x["action"] for x in d["steps"]], ["hold_key"])       # почти прямо — без поворота
         self.assertEqual(d["steps"][0]["args"]["seconds"], 4.0)
 
@@ -76,6 +76,12 @@ class GameBotTests(unittest.TestCase):
         import game_bot as g
         d = g.sanitize({"actions": [{"action": "go_to", "args": {"x": 900, "y": 500, "seconds": 1, "dir": "d"}}]}, 1920, 1080)
         self.assertEqual([(x["action"], x["args"].get("key")) for x in d["steps"]], [("hold_key", "d")])
+
+    def test_turn_angle_behind(self):
+        import game_bot as g
+        self.assertAlmostEqual(g.turn_angle(500, 100), 0, places=3)
+        self.assertGreater(g.turn_angle(750, 790), 120)         # цель справа-внизу — за спиной
+        self.assertLess(g.turn_angle(200, 300), 0)
 
     def test_sanitize_bad_input(self):
         import game_bot as g
