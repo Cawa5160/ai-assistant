@@ -263,15 +263,51 @@ def press_key(key: str):
     pyautogui.press(key)
 
 
+def _scancode_key(key: str):
+    """Модуль keyboard шлёт аппаратные коды (scancode) — их понимают игры (Roblox и др.); pyautogui шлёт только виртуальные."""
+    try:
+        import keyboard
+        return keyboard
+    except Exception:
+        return None
+
+
 def hold_key(key: str, seconds: float):
     """Удерживает клавишу (ходьба в играх: W/A/S/D). Отпускает в любом случае."""
     seconds = max(0.05, min(float(seconds), 10.0))
     log(f"Удерживаю клавишу {key} {seconds} с")
+    kb = _scancode_key(key)
+    if kb is not None:
+        try:
+            kb.press(key)
+            try:
+                time.sleep(seconds)
+            finally:
+                kb.release(key)
+            return
+        except Exception as e:
+            log(f"keyboard не смог удержать клавишу ({type(e).__name__}) — пробую pyautogui")
     pyautogui.keyDown(key)
     try:
         time.sleep(seconds)
     finally:
         pyautogui.keyUp(key)
+
+
+def look(dx: int, dy: int):
+    """Поворот камеры в играх: правая кнопка мыши зажата + относительное движение мыши (как делает человек)."""
+    import ctypes
+    log(f"Поворачиваю камеру: dx={dx}, dy={dy}")
+    u = ctypes.windll.user32
+    u.mouse_event(0x0008, 0, 0, 0, 0)                 # правая кнопка вниз
+    try:
+        time.sleep(0.05)
+        steps = max(1, int(max(abs(dx), abs(dy)) / 20))
+        for i in range(steps):
+            u.mouse_event(0x0001, int(dx / steps), int(dy / steps), 0, 0)   # относительный сдвиг
+            time.sleep(0.012)
+    finally:
+        u.mouse_event(0x0010, 0, 0, 0, 0)             # правая кнопка вверх
 
 
 def hotkey(*keys):
@@ -337,6 +373,8 @@ def run_step(step: dict):
         press_key(args["key"])
     elif action == "hold_key":
         hold_key(args["key"], args["seconds"])
+    elif action == "look":
+        look(int(args["dx"]), int(args["dy"]))
     elif action == "hotkey":
         hotkey(*args["keys"])
     elif action == "scroll":

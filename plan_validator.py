@@ -23,6 +23,7 @@ ALLOWED_ACTIONS = {
     "type_text": {"text": str},
     "press_key": {"key": str},
     "hold_key": {"key": str, "seconds": (int, float)},
+    "look": {"dx": (int, float), "dy": (int, float)},
     "hotkey": {"keys": list},
     "create_file": {"path": str},
     "move_file": {"src": str, "dst": str},
@@ -161,6 +162,11 @@ def validate_step(step):
         sec = args["seconds"]
         if sec != sec or not (0.05 <= sec <= 10):
             return False, "hold_key: допустимо от 0.05 до 10 секунд"
+
+    elif action == "look":
+        dx, dy = args["dx"], args["dy"]
+        if dx != dx or dy != dy or abs(dx) > 1500 or abs(dy) > 600:
+            return False, "look: допустимо dx до ±1500, dy до ±600 пикселей"
 
     elif action == "hotkey":
         keys = args["keys"]

@@ -33,9 +33,9 @@ QLabel#err {{ color: {c['err']}; font-size: 12px; }}
 QFrame#fld {{ background: {c['seg']}; border: 1px solid {c['line']}; border-radius: 11px; }}
 QFrame#fld[focus="true"] {{ border: 1px solid {c['acc']}; }}
 QLineEdit#fldedit {{ background: transparent; border: none; padding: 7px 4px; selection-background-color: {c['acc']}; }}
-QSpinBox#time {{ background: {c['seg']}; color: {c['text']}; border: 1px solid {c['line']}; border-radius: 11px;
-    padding: 0px; font-size: 20px; font-weight: 700; selection-background-color: {c['acc']}; }}
-QSpinBox#time:focus {{ border: 1px solid {c['acc']}; }}
+QLineEdit#time {{ background: {c['seg']}; color: {c['text']}; border: 1px solid {c['line']}; border-radius: 11px;
+    padding: 0px 4px; font-size: 20px; font-weight: 700; selection-background-color: {c['acc']}; }}
+QLineEdit#time:focus {{ border: 1px solid {c['acc']}; }}
 QComboBox#combo {{ background: {c['seg']}; border: 1px solid {c['line']}; border-radius: 11px; padding: 8px 12px; }}
 QComboBox#combo:focus {{ border: 1px solid {c['acc']}; }}
 QComboBox#combo::drop-down {{ border: none; width: 24px; }}
@@ -58,9 +58,52 @@ QCheckBox::indicator:checked {{ background: {c['acc']}; border: 1px solid {c['ac
 """
 
 
-class _TwoDigit(QSpinBox):
-    def textFromValue(self, v):
-        return f"{v:02d}"
+class _TwoDigit(QLineEdit):
+    """Поле «часы/минуты»: две цифры, колесо мыши и стрелки ↑↓ меняют значение по кругу (без QSpinBox — его
+    кнопки и отступы в QSS на Windows съедали цифры)."""
+
+    def __init__(self):
+        super().__init__()
+        self._max, self._val = 59, 0
+        self.setMaxLength(2)
+        self.setAlignment(Qt.AlignCenter)
+        self.editingFinished.connect(self._commit)
+
+    def setRange(self, lo, hi):
+        self._max = hi
+
+    def setWrapping(self, on):
+        pass
+
+    def setButtonSymbols(self, *_):
+        pass
+
+    def setValue(self, v):
+        self._val = int(v) % (self._max + 1)
+        self.setText(f"{self._val:02d}")
+
+    def value(self):
+        self._commit()
+        return self._val
+
+    def _commit(self):
+        try:
+            v = int(self.text())
+        except ValueError:
+            v = self._val
+        self.setValue(min(max(v, 0), self._max))
+
+    def keyPressEvent(self, e):
+        if e.key() in (Qt.Key_Up, Qt.Key_Down):
+            self._commit()
+            self.setValue(self._val + (1 if e.key() == Qt.Key_Up else -1))
+        else:
+            super().keyPressEvent(e)
+
+    def wheelEvent(self, e):
+        self._commit()
+        self.setValue(self._val + (1 if e.angleDelta().y() > 0 else -1))
+        e.accept()
 
 
 class _Page(QWidget):
@@ -380,7 +423,6 @@ class SchedulePage(_Page):
             sp.setWrapping(True)
             sp.setValue(v)
             sp.setAlignment(Qt.AlignCenter)
-            sp.setButtonSymbols(QSpinBox.NoButtons)
             sp.setFixedSize(58, 44)
         tr.addWidget(self.hh)
         tr.addWidget(label(":", "h1", translate=False))

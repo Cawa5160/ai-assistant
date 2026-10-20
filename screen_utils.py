@@ -4,7 +4,7 @@ import pyautogui
 from PIL import Image, ImageChops
 
 
-def take_screenshot(max_width: int = 1280):
+def take_screenshot(max_width: int = 1280, mask: bool = True):
     """
     Делает скриншот экрана, уменьшает его для экономии токенов и
     возвращает (base64_jpeg, scale).
@@ -16,7 +16,9 @@ def take_screenshot(max_width: int = 1280):
     почти на любом современном).
     """
     screenshot = pyautogui.screenshot()
-    try:                                  # перед отправкой в облако закрашиваем поля паролей
+    try:                                  # перед отправкой в облако закрашиваем поля паролей (в игре не нужно — это медленно)
+        if not mask:
+            return _finish_screenshot(screenshot, max_width)
         import screen_mask
         screenshot = screen_mask.mask_screenshot(screenshot, get_screen_size())
     except Exception as e:                # не вышло — отправляем как раньше
@@ -25,14 +27,16 @@ def take_screenshot(max_width: int = 1280):
             log(f"Маскирование паролей не сработало: {type(e).__name__}")
         except Exception:
             pass
-    scale = 1.0
+    return _finish_screenshot(screenshot, max_width)
 
+
+def _finish_screenshot(screenshot, max_width):
+    scale = 1.0
     if screenshot.width > max_width:
         scale = screenshot.width / max_width
         ratio = max_width / screenshot.width
         new_size = (max_width, int(screenshot.height * ratio))
-        screenshot = screenshot.resize(new_size, Image.LANCZOS)
-
+        screenshot = screenshot.resize(new_size, Image.BILINEAR)
     buffer = io.BytesIO()
     screenshot.save(buffer, format="JPEG", quality=70)
     b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")

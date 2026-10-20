@@ -33,6 +33,14 @@ class GameBotTests(unittest.TestCase):
         self.assertEqual(d["steps"][2]["args"]["seconds"], 3)
         self.assertEqual(d["steps"][1]["args"]["x"], 960)
 
+    def test_look_and_press_key(self):
+        import game_bot as g
+        d = g.sanitize({"actions": [{"action": "look", "args": {"dx": -300, "dy": 0}},
+                                    {"action": "press_key", "args": {"key": "space"}},
+                                    {"action": "look", "args": {"dx": 5000, "dy": 0}}]}, 1920, 1080)
+        self.assertEqual([s["action"] for s in d["steps"]], ["look", "hold_key"])
+        self.assertEqual(d["steps"][1]["args"], {"key": "space", "seconds": 0.1})
+
     def test_sanitize_bad_input(self):
         import game_bot as g
         self.assertEqual(g.sanitize("мусор", 100, 100)["steps"], [])
