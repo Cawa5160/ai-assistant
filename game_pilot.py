@@ -18,6 +18,7 @@ import agent_loop
 import ai_brain
 import config
 import game_bot
+import game_depth
 import game_vision
 import plan_validator
 from logger import log
@@ -157,7 +158,7 @@ def profile_hint(goal: str, game_process: str) -> str:
 
 # ---------- «ноги»: ведём к цели ----------
 
-def follow(target: dict, ui, game_process: str):
+def follow(target: dict, ui, game_process: str, depth=None):
     """Ведёт персонажа к цели. -> строка-итог: reached / lost / blocked / timeout / stopped."""
     frame = game_vision.grab()
     tracker = game_vision.Tracker(frame, target["x"], target["y"])
@@ -170,6 +171,8 @@ def follow(target: dict, ui, game_process: str):
     pending_shift = 0.0
     theta_s = None
     turn_ticks = 0
+    avoid_ticks = 0
+    last_dump = 0.0
     while time.time() - t0 < MAX_FOLLOW_SECONDS:
         if ui.abort_event.is_set():
             return "stopped"
@@ -221,6 +224,28 @@ def follow(target: dict, ui, game_process: str):
         theta_s = theta if theta_s is None else 0.5 * theta_s + 0.5 * theta     # сглаживание: не дёргаемся от шума трекера
         mode, dx = steer(theta_s)
         dpp = float(config.get("game_deg_per_px") or 0.45)
+        if depth is not None and mode != "turn":
+            try:
+                d = depth.predict(frame)
+                scores = game_depth.wall_scores(d)
+                if config.get("game_debug_dumps") and time.time() - last_dump > 1.5:
+                    last_dump = time.time()
+                    game_depth.dump_debug(frame, d, scores)
+                if game_depth.center_blocked(scores):
+                    side = game_depth.free_side(scores)
+                    avoid_ticks += 1
+                    if avoid_ticks > 10:
+                        return "blocked"
+                    if side is None:                       # закрыто везде — пусть сработает обход «упёрся»
+                        stuck = max(stuck, 2)
+                        continue
+                    ui.set_result(f"🧱 Вижу препятствие — обхожу в сторону: {int(side)}°")
+                    mode, dx = "arc", int(max(-MAX_ARC_DEG, min(MAX_ARC_DEG, side * 0.5)) / dpp)
+                else:
+                    avoid_ticks = 0
+            except Exception as e:
+                log(f"Пилот: глубина отключена ({type(e).__name__}: {e})")
+                depth = None
         turn_ticks = turn_ticks + 1 if mode == "turn" else 0
         if turn_ticks > 4:
             return "lost"                                # крутимся на месте и не сходимся — пусть ИИ посмотрит заново
@@ -245,6 +270,11 @@ def follow(target: dict, ui, game_process: str):
 # ---------- главный цикл ----------
 
 def run(goal: str, ui, game_process: str):
+    depth = None
+    if config.get("game_depth"):
+        ui.set_result("📥 Готовлю модель глубины (при первом запуске скачивается ~100 МБ)…")
+        depth = game_depth.load(progress=lambda f: ui.set_result(f"📥 Скачиваю модель глубины: {int(f * 100)}%"))
+        ui.set_result("🧱 Глубина включена — вижу стены." if depth else "Глубина недоступна — иду без неё.")
     max_min = float(config.get("game_max_minutes") or 0)
     started = time.time()
     hint = profile_hint(goal, game_process)
@@ -299,7 +329,7 @@ def run(goal: str, ui, game_process: str):
             continue
         turns = 0
 
-        outcome = follow(t, ui, game_process)
+        outcome = follow(t, ui, game_process, depth)
         history.append(f"«{t['name']}» ({t['kind']}): {outcome}")
         log(f"Пилот: цель «{t['name']}» → {outcome}")
         if outcome == "stopped":

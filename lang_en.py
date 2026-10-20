@@ -1115,3 +1115,6 @@ TR.update({'🚧 Упёрся — обхожу, попытка:': '🚧 Blocked 
 
 
 TR.update({'Играть': 'Play', '  Играть': 'Play'})
+
+
+TR.update({'📥 Готовлю модель глубины (при первом запуске скачивается ~100 МБ)…': '📥 Preparing the depth model (≈100 MB download on first run)…', '📥 Скачиваю модель глубины:': '📥 Downloading the depth model:', '🧱 Глубина включена — вижу стены.': '🧱 Depth is on — I can see walls.', 'Глубина недоступна — иду без неё.': 'Depth is unavailable — going without it.', '🧱 Вижу препятствие — обхожу в сторону:': '🧱 Obstacle ahead — going around toward'})

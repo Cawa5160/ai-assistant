@@ -16,7 +16,7 @@ LOGO = os.path.join(BASE_DIR, "assets", "logo_128.png")
 ICON = os.path.join(BASE_DIR, "assets", "app.ico")
 REQUIREMENTS = os.path.join(BASE_DIR, "requirements.txt")
 CRITICAL = {"pyautogui", "keyboard", "pyside6-essentials", "pillow", "pyperclip", "psutil", "requests"}
-IMPORT_NAME = {"pillow": "PIL", "speechrecognition": "speech_recognition", "pyside6-essentials": "PySide6"}
+IMPORT_NAME = {"pillow": "PIL", "speechrecognition": "speech_recognition", "pyside6-essentials": "PySide6", "onnxruntime-directml": "onnxruntime"}
 STEPS = ["Подготовка", "Компоненты", "Проверка", "Готово"]
 
 try:

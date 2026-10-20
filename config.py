@@ -13,7 +13,7 @@ BASE_DIR = DATA_DIR  # рядом со скриптом (или рядом с .e
 SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
 LOG_FILE = os.path.join(BASE_DIR, "action_log.txt")
 
-APP_VERSION = "3.5.2"
+APP_VERSION = "3.6.0"
 SETTINGS_VERSION = 2  # растёт, когда меняются значения по умолчанию, которые нужно применить и старым установкам
 
 DEFAULTS = {
@@ -39,6 +39,8 @@ DEFAULTS = {
     "fallback_models": ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
     "auto_confirm_seconds": 5,  # таймер автозапуска простых команд (0 — всегда ждать клика)
     "game_engine": "pilot",      # игровой режим: "pilot" (ИИ выбирает цель, локальный цикл ведёт) или "llm" (ИИ на каждый шаг)
+    "game_depth": True,          # игровой режим: оценка глубины (видеть стены); нужна onnxruntime и модель ~100 МБ (скачается сама)
+    "game_debug_dumps": True,    # сохранять картинки глубины в папку game_debug (для настройки; последние 40)
     "game_max_minutes": 60,      # игровой режим: максимум минут за один запуск (0 — без ограничения)
     "game_thinking": "low",  # игровой режим: быстрые ответы ИИ (minimal|low|…; "" = по умолчанию)
     "game_deg_per_px": 0.45,      # игровой режим: градусов поворота камеры на 1 пиксель мыши (если бот недо-/перекручивает — подкрути)
