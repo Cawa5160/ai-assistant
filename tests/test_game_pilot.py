@@ -88,6 +88,28 @@ class PilotMathTests(unittest.TestCase):
         self.assertTrue(pv.validate_step({"action": "hop_forward", "args": {"seconds": 1.5}})[0])
         self.assertFalse(pv.validate_step({"action": "hop_forward", "args": {"seconds": 30}})[0])
 
+    def test_parse_plan_and_lesson(self):
+        import game_pilot as gp
+        d = gp.parse_decision({"plan": ["a", "", "b"], "lesson": "лестница — kind climb", "target": None})
+        self.assertEqual(d["plan"], ["a", "b"])
+        self.assertEqual(d["lesson"], "лестница — kind climb")
+
+    def test_lessons_saved_and_deduped(self):
+        import os
+        import tempfile
+        import game_profiles as gpf
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(gpf, "PATH", os.path.join(tmp, "p.json")):
+                self.assertTrue(gpf.add_lesson("Game.exe", "лестница у входа — kind climb"))
+                self.assertFalse(gpf.add_lesson("game.exe", "Лестница у входа — kind climb"))
+                self.assertFalse(gpf.add_lesson("game.exe", "коротко"))
+                for i in range(20):
+                    gpf.add_lesson("game.exe", f"урок номер {i} достаточно длинный")
+                self.assertEqual(len(gpf.lessons_for("game.exe")), gpf.MAX_LESSONS)
+                self.assertIn("ЗНАНИЯ", gpf.hint_for("game.exe"))
+                gpf.save_hint("game.exe", "Игра", "моя подсказка")
+                self.assertEqual(len(gpf.lessons_for("game.exe")), gpf.MAX_LESSONS)   # save_hint не стирает уроки
+
     def test_near(self):
         import game_pilot as gp
         self.assertTrue(gp.near(520, 600))
