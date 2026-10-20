@@ -1,7 +1,5 @@
-"""Диалоги и окна автопилота на Qt — те же функции и классы, что в gui.py (Tk), с теми же именами и сигнатурами.
-
-runtime.QtShell вызывает install(): после этого gui.ask_yes_no, gui.confirm_plan, gui.open_agent_window и остальные
-подменяются на версии отсюда, а main.py/agent_loop.py остаются как были. Все публичные функции безопасно звать из
+"""Диалоги и окна автопилота на Qt (main.py подключает этот модуль как `gui`: gui.ask_yes_no, gui.confirm_plan,
+gui.open_agent_window…). runtime.QtShell вызывает install(). Все публичные функции безопасно звать из
 любого потока: они сами переходят в поток Qt. Методы окон (add_step, finish, mark_step…) тоже потокобезопасны.
 """
 import base64
@@ -19,6 +17,25 @@ from .widgets import IconButton, T, Tile, label
 
 _post = None            # post(fn): выполнить в потоке Qt (задаёт runtime.install)
 RISK_ICON = {"low": "🟢", "normal": "🟡", "high": "🔴"}
+
+
+def _format_step_args(step: dict) -> str:
+    """Текст args для показа пользователю — с маскировкой чувствительного текста."""
+    args = dict(step.get("args", {}))
+    if step.get("action") == "type_text" and args.get("sensitive"):
+        return "{'text': '••••••• (скрыто)'}"
+    return str(args)
+
+
+def _step_line(i: int, step: dict) -> str:
+    import plan_validator
+    risk = RISK_ICON.get(plan_validator.classify_risk(step), "")
+    try:
+        import agent_loop
+        text = agent_loop.describe_step(step)
+    except Exception:
+        text = f"{step.get('action')}: {_format_step_args(step)}"
+    return f"{risk} {i + 1}. {text}"
 
 
 # ---------- общие помощники ----------
@@ -173,7 +190,6 @@ def ask_command() -> str:
 
 def confirm_plan(summary: str, steps: list, screenshot_b64=None, auto_seconds: int = 0, manual: bool = False):
     import action_executor
-    import gui
     import plan_validator
 
     def go():
@@ -213,7 +229,7 @@ def confirm_plan(summary: str, steps: list, screenshot_b64=None, auto_seconds: i
                 warn, blocked = "  ⚠️ " + T("путь вне разрешённых папок"), True
             elif action == "move_file" and not (action_executor.is_path_allowed(args.get("src", "")) and action_executor.is_path_allowed(args.get("dst", ""))):
                 warn, blocked = "  ⚠️ " + T("путь вне разрешённых папок"), True
-            cb = QCheckBox(gui._step_line(i, step) + warn)
+            cb = QCheckBox(_step_line(i, step) + warn)
             cb.setChecked(True)
             checks.append(cb)
             bl.addWidget(cb)
@@ -680,16 +696,7 @@ def open_thinking_window(text: str, on_stop) -> ThinkingWindow:
 
 # ---------- подмена функций gui.py ----------
 
-API = ["ask_command", "confirm_plan", "show_notification", "first_run_wizard", "confirm_agent_start",
-       "ExecutionProgressWindow", "open_progress_window", "ask_yes_no", "VoiceWindow", "open_voice_window",
-       "AgentBar", "AgentWindow", "open_agent_window", "ThinkingWindow", "open_thinking_window", "exclude_from_capture"]
-
-
 def install(post):
-    """Подменяет диалоги в gui.py на Qt-версии. post(fn) — выполнить в потоке Qt."""
+    """Запоминает, как выполнять код в потоке Qt (его даёт runtime.QtShell)."""
     global _post
     _post = post
-    import gui
-    g = globals()
-    for name in API:
-        setattr(gui, name, g[name])

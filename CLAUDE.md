@@ -3,7 +3,7 @@
 Пользователь пишет по-русски (с опечатками), любит короткие ответы. Windows 11, игровой ноутбук (RTX 4050, 6 ГБ видеопамяти, ~16 ГБ RAM), один монитор 1920×1080 @125%, Python 3.14, Ollama нет. Проверяет сборки сам на своём ПК и присылает скриншоты/логи.
 
 ## Что это
-Tkinter-ассистент: пишешь/говоришь команду → Gemini (бесплатные ключи, несколько) смотрит на экран и выполняет шаги. Трей, Telegram-бот, макросы, шаблоны, расписание, голос. Поставляется как самораспаковывающийся `AI_Assistant_Setup.bat` (`python tools/build_installer.py`, проверка `python tools/verify_installer.py`). Настоящий Setup.exe — только GitHub Actions → Run workflow.
+Qt-ассистент (PySide6): пишешь/говоришь команду → Gemini (бесплатные ключи, несколько) смотрит на экран и выполняет шаги. Трей, Telegram-бот, макросы, шаблоны, расписание, голос. Поставляется как самораспаковывающийся `AI_Assistant_Setup.bat` (`python tools/build_installer.py`, проверка `python tools/verify_installer.py`). Настоящий Setup.exe — только GitHub Actions → Run workflow.
 
 ## Архитектура (кратко)
 - Порядок в `main.process_command`: `macros.try_memory_command` → `try_quick_action` → view_only → `macros.try_macro_plan` / `templates.try_template_plan` / `try_quick_plan` / `try_local_plan` → `_run_agent` (автопилот: `agent_loop.decide` + `run_agent`).
@@ -24,13 +24,13 @@ Tkinter-ассистент: пишешь/говоришь команду → Gem
 
 ## Интерфейс v3 (Qt) — сделан в v2.1–3.0.0 (19.10.2026); пользователь проверил 3.0.0 на ПК: «всё работает идеально»
 - `qt_ui/`: `runtime.QtShell` (подставляется вместо `AppWindow`, настройка `ui_engine`, `--tk`/`--qt`), `main_window`, страницы (`pages`, `pages_more`, `memory_page`, `settings_page`), бэкенды-миксины (`backend.RealBackend` = `MoreBackend`+`MemoryBackend`+`SettingsBackend`; у каждого есть Stub для макетов), `dialogs_qt` (все диалоги и окна автопилота с теми же именами, что в `gui.py`; `install()` подменяет функции в `gui`), `attachments`/`dialogs` (вложения и согласие), `file_tools`/`file_ops_dialog` + `file_ops.py` (файловые операции, удаление только в Корзину, отмена), `screen_mask.py` (закраска полей паролей на скриншотах), `files_io.py` (чтение файлов, скрытие секретов).
-- Tk (`gui.py`, `app_window.py`) — запасной интерфейс; установщик (`installer_gui.py`) остаётся на Tk. Трей — pystray, уведомления — winotify (не менялись).
+- Tk удалён в 3.1.0 (нет `--tk`/`ui_engine`); установщик (`installer_gui.py`) остаётся на Tk. Трей — `qt_ui/tray.py`, уведомления — winotify. OpenRouter — запасной провайдер (`openrouter.py`, поля /models не проверены). Автообновление — `updater.py` через GitHub Releases (нужны релизы и токен для приватного репо).
 - Предпросмотр без экрана: `QT_QPA_PLATFORM=offscreen python -m qt_ui.preview /tmp/qshots` (перед созданием окна нужен `theme.set(name, app)`).
 - Явно не проверено по пунктам (общий итог пользователя — «всё работает»): UI Automation маска паролей, возврат из Корзины, WDA_EXCLUDEFROMCAPTURE для окон Qt.
-- Предложено, не сделано: удалить Tk после проверки пользователем; согласие/маска в Telegram-путях.
+- Предложено, не сделано: согласие/маска в Telegram-путях.
 
 ## Как выпускать версию
-1. Править код; `python -m unittest discover -s tests` (44 теста, Windows не нужен).
+1. Править код; `python -m unittest discover -s tests` (74 теста, Windows не нужен).
 2. Поднять версию в `config.py` (`APP_VERSION`) и `tools/build_installer.py` (`APP_VERSION_LABEL`), записать в `CHANGELOG.md`.
 3. `python tools/build_installer.py` → `python tools/verify_installer.py`.
 4. Коммит с строками Co-Authored-By/Claude-Session (локально), отправить `.bat` пользователю файлом. На GitHub не пушить, пока пользователь не попросит (19.10.2026).

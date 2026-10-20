@@ -19,20 +19,20 @@ OUT_PATH = os.path.join(os.path.dirname(SRC_DIR), "AI_Assistant_Setup.bat")
 
 # Какие файлы кладём в установщик. Порядок важен только для verify_installer.py.
 FILES_TO_EMBED = [
-    "action_executor.py", "agent_loop.py", "ai_brain.py", "app_paths.py", "app_window.py",
-    "atomic_io.py", "autostart.py", "config.py", "diagnostics.py", "gui.py", "history.py",
+    "action_executor.py", "agent_loop.py", "ai_brain.py", "app_paths.py",
+    "atomic_io.py", "autostart.py", "config.py", "diagnostics.py", "history.py",
     "installer_gui.py", "key_manager.py", "local_brain.py", "logger.py", "main.py",
-    "notifications.py", "quick_commands.py", "quick_actions.py", "macros.py", "telegram_bot.py", "media_input.py", "clipboard_tools.py", "backup.py", "templates.py", "wakeword.py", "mouse.py", "app_profiles.py", "audit.py", "updater.py", "ui_elements.py", "ui_kit.py", "chat.py", "hardware.py", "local_llm.py", "i18n.py", "lang_en.py", "lang_uk.py", "plan_validator.py", "privacy.py", "scheduler.py",
+    "notifications.py", "quick_commands.py", "quick_actions.py", "macros.py", "telegram_bot.py", "media_input.py", "clipboard_tools.py", "backup.py", "templates.py", "wakeword.py", "mouse.py", "app_profiles.py", "audit.py", "updater.py", "openrouter.py", "ui_elements.py", "chat.py", "hardware.py", "local_llm.py", "i18n.py", "lang_en.py", "lang_uk.py", "plan_validator.py", "privacy.py", "scheduler.py",
     "screen_utils.py", "secure_store.py", "shortcuts.py", "single_instance.py", "theme.py",
     "ui_thread.py", "voice_input.py", "voice_output.py",
     "qt_ui/__init__.py", "qt_ui/tokens.py", "qt_ui/icons.py", "qt_ui/theme_manager.py", "qt_ui/widgets.py",
-    "qt_ui/pages.py", "qt_ui/main_window.py", "qt_ui/backend.py", "qt_ui/runtime.py", "qt_ui/attachments.py", "qt_ui/dialogs_qt.py", "qt_ui/pages_more.py", "qt_ui/memory_page.py", "qt_ui/memory_backend.py", "qt_ui/settings_page.py", "qt_ui/settings_backend.py", "qt_ui/more_backend.py", "qt_ui/file_ops_dialog.py", "qt_ui/file_tools.py", "file_ops.py", "screen_mask.py", "qt_ui/dialogs.py", "files_io.py", "qt_ui/preview.py",
+    "qt_ui/pages.py", "qt_ui/main_window.py", "qt_ui/backend.py", "qt_ui/runtime.py", "qt_ui/attachments.py", "qt_ui/dialogs_qt.py", "qt_ui/pages_more.py", "qt_ui/memory_page.py", "qt_ui/memory_backend.py", "qt_ui/settings_page.py", "qt_ui/settings_backend.py", "qt_ui/more_backend.py", "qt_ui/file_ops_dialog.py", "qt_ui/file_tools.py", "file_ops.py", "screen_mask.py", "qt_ui/dialogs.py", "files_io.py", "qt_ui/preview.py", "qt_ui/tray.py",
     "requirements.txt", "README.md", "CHANGELOG.md", "LICENSE",
     "start.bat", "uninstall.bat", "cleanup.py", "build_exe.bat",
     "assets/app.ico", "assets/logo_128.png", "assets/logo_64.png",
 ]
 
-APP_VERSION_LABEL = "3.0.0"
+APP_VERSION_LABEL = "3.1.0"
 SUBDIRS = sorted({os.path.dirname(p) for p in FILES_TO_EMBED if "/" in p})
 
 

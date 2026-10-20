@@ -13,11 +13,15 @@ BASE_DIR = DATA_DIR  # рядом со скриптом (или рядом с .e
 SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
 LOG_FILE = os.path.join(BASE_DIR, "action_log.txt")
 
-APP_VERSION = "3.0.0"
+APP_VERSION = "3.1.0"
 SETTINGS_VERSION = 2  # растёт, когда меняются значения по умолчанию, которые нужно применить и старым установкам
 
 DEFAULTS = {
-    "ui_engine": "qt",   # "qt" — новый интерфейс (PySide6), "tk" — прежний; если PySide6 нет, автоматически tk
+    "github_token_plain": "",
+    "update_notified": "",         # версия, о которой уже сообщили (чтобы не напоминать каждый запуск)
+    "openrouter_enabled": False,   # запасной провайдер, если Gemini недоступен (ключ — в защищённом хранилище)
+    "openrouter_model": "",        # пусто = первая бесплатная модель из списка OpenRouter
+    "openrouter_key_plain": "",
     "cloud_files_consent": False,   # разрешил ли пользователь отправлять файлы/фото в облако (Gemini) без вопроса каждый раз
     "ui_theme": "dark",   # тема нового интерфейса: dark / light
     "gemini_api_keys": [],  # список ключей — по одному с каждого Google-аккаунта

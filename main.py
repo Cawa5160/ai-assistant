@@ -5,7 +5,7 @@ AI-ассистент для управления компьютером (Window
          python main.py --background — сразу в трее (так стартует автозагрузка)
 
 Как устроено приложение:
-  * Главный поток — главное окно (app_window.py). Крестик его СВОРАЧИВАЕТ: программа
+  * Главный поток — главное окно (qt_ui/). Крестик его СВОРАЧИВАЕТ: программа
     продолжает работать в трее (горячая клавиша, расписание, голосовые команды).
   * Трей (pystray) работает в своём потоке. Двойной клик по значку — открыть окно.
   * Команды выполняются в рабочих потоках; всё, что нужно показать на экране, они
@@ -37,16 +37,18 @@ except Exception as _e:
     log(f"main.py:36: {type(_e).__name__}: {_e}")
 
 import keyboard
-import pystray
 from PIL import Image, ImageDraw
 
 import chat
 import i18n
 import config
-import gui
+try:
+    from qt_ui import dialogs_qt as gui      # все диалоги и окна автопилота (Qt)
+except ImportError as _qt_err:             # PySide6 не установлен — main() сообщит об этом
+    gui = None
+    _QT_ERROR = _qt_err
 import theme
 import ui_thread
-import app_window
 import plan_validator
 import agent_loop
 import voice_input
@@ -890,26 +892,29 @@ def set_tray_status(color: str):
 
 
 def setup_tray():
+    """Значок в трее (Qt). Подписи пунктов переводятся; двойной клик — открыть окно."""
     global _tray_icon
-    more = pystray.Menu(
-        pystray.MenuItem(i18n.t("📜  История команд"), lambda: show_window("history")),
-        pystray.MenuItem(i18n.t("📅  Расписание задач"), lambda: show_window("schedule")),
-        pystray.MenuItem(i18n.t("🩺  Проверка системы"), lambda: show_window("diag")),
-    )
-    menu = pystray.Menu(
-        pystray.MenuItem(i18n.t("🪟  Открыть окно"), lambda: show_window(), default=True),   # двойной клик по значку
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem(i18n.t("💬  Быстрая команда"), _in_thread(on_text_command)),
-        pystray.MenuItem(i18n.t("🎙️  Команда голосом"), _in_thread(on_voice_command)),
-        pystray.MenuItem(i18n.t("🔁  Повторить последнюю"), _in_thread(on_repeat_last)),
-        pystray.MenuItem(i18n.t("🛑  Остановить автопилот"), _in_thread(stop_agent)),
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem(i18n.t("Ещё"), more),
-        pystray.MenuItem(i18n.t("⚙️  Настройки"), lambda: show_window("settings")),
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem(i18n.t("🚪  Выход"), lambda: quit_app()),
-    )
-    _tray_icon = pystray.Icon("ai_assistant", make_tray_icon_image(COLOR_IDLE), "AI Ассистент", menu)
+    from qt_ui.tray import QtTray
+    t = i18n.t
+    items = [
+        (t("🪟  Открыть окно"), lambda: show_window(), True),
+        None,
+        (t("💬  Быстрая команда"), _in_thread(on_text_command)),
+        (t("🎙️  Команда голосом"), _in_thread(on_voice_command)),
+        (t("🔁  Повторить последнюю"), _in_thread(on_repeat_last)),
+        (t("🛑  Остановить автопилот"), _in_thread(stop_agent)),
+        None,
+        (t("Ещё"), [
+            (t("📜  История команд"), lambda: show_window("history")),
+            (t("📅  Расписание задач"), lambda: show_window("schedule")),
+            (t("🩺  Проверка системы"), lambda: show_window("diag")),
+        ]),
+        (t("⚙️  Настройки"), lambda: show_window("settings")),
+        None,
+        (t("🚪  Выход"), lambda: quit_app()),
+    ]
+    _tray_icon = QtTray(items, make_tray_icon_image(COLOR_IDLE), "AI Ассистент", post=_app.post,
+                        on_open=lambda: show_window())
     return _tray_icon
 
 
@@ -970,6 +975,19 @@ def on_scheduled_command(command: str):
     threading.Thread(target=process_command, args=(command,), daemon=True).start()
 
 
+def _startup_update_check():
+    """Через полминуты после запуска тихо смотрит, нет ли новой версии, и один раз за версию сообщает в уведомлении."""
+    time.sleep(30)
+    try:
+        import updater
+        state, text, _url = updater.check()
+        if state == "new" and config.get("update_notified") != text:
+            config.save({"update_notified": text})
+            notify("AI Ассистент", f"Есть обновление: {text}. Установить: Настройки → Запуск → Обновления.")
+    except Exception as e:
+        log(f"Проверка обновлений: {type(e).__name__}: {e}")
+
+
 def _startup(background: bool):
     """Выполняется в интерфейсном потоке сразу после старта главного цикла."""
     if not config.get("gemini_api_keys"):
@@ -988,17 +1006,20 @@ def _startup(background: bool):
 
 
 def _create_ui(controller):
-    """Новый интерфейс (Qt), если включён и PySide6 есть; иначе прежний на Tk. Параметр --tk / --qt перекрывает настройку."""
-    want = "tk" if "--tk" in sys.argv else "qt" if "--qt" in sys.argv else (config.get("ui_engine") or "qt")
-    if want == "qt":
-        try:
-            from qt_ui import runtime
-            if runtime.available():
-                return runtime.QtShell(controller)
-            log("PySide6 не установлен — работает прежний интерфейс.")
-        except Exception as e:
-            log(f"Новый интерфейс не запустился ({type(e).__name__}: {e}) — работает прежний.")
-    return app_window.AppWindow(controller)
+    """Окно на Qt (PySide6). Прежнего интерфейса на Tk больше нет."""
+    from qt_ui import runtime
+    return runtime.QtShell(controller)
+
+
+def _fatal_no_qt():
+    msg = ("Не найден компонент PySide6 (интерфейс программы).\n\nЗапусти установщик AI_Assistant_Setup.bat заново "
+           "или выполни: python -m pip install PySide6-Essentials")
+    log("PySide6 не установлен: " + str(globals().get("_QT_ERROR", "")))
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, msg, "AI Ассистент", 0x10)
+    except Exception:
+        print(msg)
 
 
 def main():
@@ -1010,6 +1031,11 @@ def main():
         single_instance.signal_existing()
         return
 
+    if gui is None:
+        _fatal_no_qt()
+        single_instance.release()
+        return
+
     log("Запуск AI-ассистента...")
     backup.restore_secrets()         # ключи/токен пропали (чистка, новая папка) — вернуть из резерва
     backup.full_snapshot()
@@ -1017,22 +1043,17 @@ def main():
         _app = _create_ui(Controller())
         single_instance.start_listener(lambda: ui_thread.post(_app.show))
         register_hotkeys()
-        icon = setup_tray()
-        threading.Thread(target=icon.run, daemon=True).start()
+        setup_tray()
         scheduler.start(on_scheduled_command, _on_schedule_skipped)
         telegram_bot.start(on_telegram_command, TELEGRAM_HOOKS)
         wakeword.start(_on_wake_word, _command_lock.locked)
         ui_thread.post(_startup, background)
+        threading.Thread(target=_startup_update_check, daemon=True).start()
         log("Приложение работает. Крестик окна сворачивает его в трей; выход — кнопка в окне или меню трея.")
         _app.run()
     finally:
         ui_thread.shutdown()
         single_instance.release()
-        try:
-            if _app is not None and hasattr(_app, "root"):
-                _app.root.destroy()
-        except Exception as _e:
-            log(f"main.py:978: {type(_e).__name__}: {_e}")
         try:
             if _tray_icon is not None:
                 _tray_icon.stop()

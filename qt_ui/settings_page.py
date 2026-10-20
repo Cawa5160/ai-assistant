@@ -399,6 +399,44 @@ class SettingsPage(_Page):
         self._field(cl, "Запросов в минуту на ключ — свой «светофор», чтобы не упереться в лимит Google "
                         "(бесплатный тариф: обычно 5–10 на проект; 0 = без ограничения)", "requests_per_minute",
                     90, numeric=(0, 120))
+        self._build_openrouter(lay)
+
+    def _build_openrouter(self, lay):
+        cl = self._section(lay, "Запасной ИИ (OpenRouter)",
+                           "Если Gemini недоступен (лимиты на всех ключах, сбой), запрос уйдёт на OpenRouter. "
+                           "Нужен ключ с openrouter.ai; бесплатные модели есть, но с ограничениями. Скриншоты при этом "
+                           "тоже уходят туда — включай, только если тебя это устраивает.")
+        self._switch(cl, "Использовать OpenRouter, когда Gemini не отвечает", "openrouter_enabled")
+        self.or_caption = None
+        self._field(cl, "Ключ OpenRouter", "openrouter_key", 360, "sk-or-…", secret=True)
+        self._field(cl, "Модель (пусто — подберу первую бесплатную сама)", "openrouter_model", 360, "например, имя из списка ниже")
+        cl.addLayout(self._flow_row(self._soft("Найти бесплатные модели", self._find_or_models, icon="search")))
+        self.or_grid = QGridLayout()
+        self.or_grid.setSpacing(6)
+        cl.addLayout(self.or_grid)
+        self.or_msg = self._result(cl)
+
+    def _find_or_models(self):
+        self._msg(self.or_msg, T("Спрашиваю у OpenRouter список моделей…"))
+        self.backend.settings_or_models(self.f["openrouter_key"].text().strip(), self._show_or_models)
+
+    def _show_or_models(self, ok, result):
+        while self.or_grid.count():
+            it = self.or_grid.takeAt(0)
+            if it.widget():
+                it.widget().deleteLater()
+        if not ok:
+            return self._msg(self.or_msg, str(result), "stErr")
+        free = [m for m in result if m[1]][:12]
+        if not free:
+            return self._msg(self.or_msg, T("Бесплатных моделей не нашлось."))
+        self._msg(self.or_msg, T("Нажми на модель, чтобы подставить её (👁 — видит картинки), потом «Сохранить настройки»:"))
+        for n, (mid, _free, vision) in enumerate(free):
+            b = QPushButton(("👁 " if vision else "") + mid)
+            b.setObjectName("soft")
+            b.setCursor(Qt.PointingHandCursor)
+            b.clicked.connect(lambda _=False, m=mid: self.f["openrouter_model"].edit.setText(m))
+            self.or_grid.addWidget(b, n // 2, n % 2)
 
     def _toggle_keys(self):
         on = not self.keys._visible
@@ -767,11 +805,36 @@ class SettingsPage(_Page):
         cl.addSpacing(6)
         cl.addLayout(self._flow_row(self._soft("Создать ярлыки (рабочий стол и меню Пуск)", self._make_shortcuts,
                                                icon="layers")))
-        cl = self._section(lay, "Интерфейс программы")
-        self._segmented(cl, "Какой интерфейс открывать", "ui_engine",
-                        [("qt", "Новый (Qt)"), ("tk", "Классический (Tk)")],
-                        "Применится после перезапуска программы. Если нового интерфейса нет в сборке, "
-                        "откроется классический.")
+        self._build_updates(lay)
+
+    def _build_updates(self, lay):
+        cl = self._section(lay, "Обновления",
+                           "Программа проверяет GitHub Releases. Обновление скачивается и ставится только после твоего нажатия.")
+        self.upd_msg = self._result(cl)
+        self.upd_progress = label("", "small", translate=False)
+        cl.addWidget(self.upd_progress)
+        self.upd_btn_install = self._soft("Скачать и установить", self._install_update, primary=True, icon="arrow-up")
+        self.upd_btn_install.setVisible(False)
+        cl.addLayout(self._flow_row(self._soft("Проверить обновления", self._check_update, icon="search"), self.upd_btn_install))
+        self._field(cl, "Токен GitHub (только если репозиторий приватный; доступ на чтение)", "github_token", 360, "github_pat_…",
+                    secret=True)
+
+    def _check_update(self):
+        self._msg(self.upd_msg, T("Проверяю…"))
+        self.backend.update_check(self._update_checked)
+
+    def _update_checked(self, state, text, url):
+        self._msg(self.upd_msg, T(text), "stOk" if state == "current" else "stWarn" if state == "new" else "small")
+        self.upd_btn_install.setVisible(state == "new")
+
+    def _install_update(self):
+        from PySide6.QtWidgets import QMessageBox
+        if QMessageBox.question(self, T("Обновление"), T("Скачать новую версию и запустить установщик? Программа закроется.")) != QMessageBox.Yes:
+            return
+        self.upd_btn_install.setEnabled(False)
+        self.backend.update_install(lambda p: self.upd_progress.setText(f"{T('Скачиваю')}: {int(p * 100)}%"),
+                                    lambda ok, m: (self._msg(self.upd_msg, T(m), "stOk" if ok else "stErr"),
+                                                   self.upd_btn_install.setEnabled(True)))
 
     def _make_shortcuts(self):
         self._set_status(T("Создаю ярлыки…"), "small")
@@ -810,6 +873,9 @@ class SettingsPage(_Page):
                                   else T("⚠️ Защищённое хранилище недоступно — ключи будут лежать в обычном файле settings.json."))
         self.f["model"].edit.setText(cur.get("model", "gemini-3.5-flash"))
         self.f["requests_per_minute"].edit.setText(str(cur.get("requests_per_minute", 6)))
+        self.f["openrouter_model"].edit.setText(cur.get("openrouter_model", ""))
+        self.f["openrouter_key"].clear()
+        self.f["openrouter_key"].edit.setPlaceholderText(T("Сохранён — оставь пустым, чтобы не менять") if cur.get("openrouter_has_key") else "sk-or-…")
         self.f["fallback_models"].edit.setText(", ".join(cur.get("fallback_models") or []))
         self.f["auto_confirm_seconds"].edit.setText(str(cur.get("auto_confirm_seconds", 5)))
         for k, d in (("hotkey_open_window", "ctrl+shift+a"), ("hotkey_voice", "ctrl+shift+v"), ("hotkey_stop", "ctrl+shift+s")):
@@ -822,7 +888,6 @@ class SettingsPage(_Page):
         self.seg["ui_theme"].set_value(cur.get("ui_theme", "dark") if cur.get("ui_theme") in ("dark", "light") else theme.name)
         self.seg["ui_language"].set_value(cur.get("ui_language", "ru"))
         self.seg["voice_language"].set_value(cur.get("voice_language", "ru-RU"))
-        self.seg["ui_engine"].set_value(cur.get("ui_engine", "qt"))
         self.tg_token.clear()
         self.tg_clear.setChecked(False)
         has = bool(cur.get("telegram_has_token"))
@@ -842,6 +907,7 @@ class SettingsPage(_Page):
         v = {
             "gemini_api_keys": self.keys.keys(),
             "model": f["model"], "requests_per_minute": f["requests_per_minute"],
+            "openrouter_key": f["openrouter_key"], "openrouter_model": f["openrouter_model"],
             "fallback_models": f["fallback_models"], "auto_confirm_seconds": f["auto_confirm_seconds"],
             "hotkey_open_window": f["hotkey_open_window"], "hotkey_voice": f["hotkey_voice"],
             "hotkey_stop": f["hotkey_stop"], "local_model_name": f["local_model_name"],
@@ -849,7 +915,7 @@ class SettingsPage(_Page):
             "voice_device": self.mic.currentData() or "",
             "telegram_token": self.tg_token.text().strip(), "telegram_clear_token": self.tg_clear.isChecked(),
             "ui_theme": self.seg["ui_theme"].value(), "ui_language": self.seg["ui_language"].value(),
-            "voice_language": self.seg["voice_language"].value(), "ui_engine": self.seg["ui_engine"].value(),
+            "voice_language": self.seg["voice_language"].value()
         }
         for k, sw in self.sw.items():
             v[k] = sw.isChecked()
@@ -857,6 +923,10 @@ class SettingsPage(_Page):
 
     def save(self):
         values = self.collect()
+        tok = self.f["github_token"].text().strip()
+        if tok:
+            self.backend.update_set_token(tok)
+            self.f["github_token"].clear()
         err = self.backend.settings_save(values)
         if err:
             return self._set_status(T(err), "err")

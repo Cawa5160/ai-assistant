@@ -81,6 +81,10 @@ QLabel#bartext { color: white; font-weight: 600; }
 QPlainTextEdit#log, QTextEdit#log { background: $side; border: 1px solid $line; border-radius: 10px; padding: 8px; color: $text; font-family: Consolas, "Cascadia Mono", monospace; font-size: 13px; }
 QLabel#warn { color: $warn; }
 QLabel#err { color: $err; }
+QMenu { background: $card; border: 1px solid $line; padding: 6px; }
+QMenu::item { padding: 8px 22px 8px 14px; border-radius: 6px; color: $text; background: transparent; }
+QMenu::item:selected { background: $sel; }
+QMenu::separator { height: 1px; background: $line; margin: 5px 8px; }
 QToolTip { background: $card; color: $text; border: 1px solid $line; padding: 5px 8px; border-radius: 6px; }
 """)
 

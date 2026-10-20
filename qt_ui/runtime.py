@@ -35,9 +35,9 @@ class _Bridge(QObject):
 
 
 class QtShell:
-    """Подставляется вместо app_window.AppWindow в main.py: те же show/refresh/set_busy/quit/run."""
+    """Главный объект интерфейса для main.py: show/refresh/set_busy/hide_for_agent/quit/run."""
 
-    def __init__(self, controller, tk_factory=None):
+    def __init__(self, controller):
         import i18n
         i18n.load_language()
         self.app = QApplication.instance() or QApplication([])
@@ -48,7 +48,6 @@ class QtShell:
         self.app.setFont(font)
         theme.set(config.get("ui_theme") or "dark", self.app)
         self.bridge = _Bridge()
-        self.tk = tk_factory() if tk_factory else None     # прежнее окно Tk больше не нужно: диалоги и все страницы на Qt
         self.backend = RealBackend(controller, self.post, self.open_classic)
         from . import dialogs_qt
         dialogs_qt.install(self.post)        # gui.ask_yes_no, confirm_plan, окно автопилота… -> версии на Qt
@@ -103,11 +102,6 @@ class QtShell:
 
     def set_busy(self, busy, text=""):
         self.post(lambda: self.window.set_busy(busy, text))
-        if self.tk is not None:
-            try:
-                self.tk.set_busy(busy, text)
-            except Exception:
-                pass
 
     def hide_for_agent(self):
         """Прячет оба окна на время автопилота (ИИ не должен видеть приложение на скриншоте)."""
@@ -115,11 +109,6 @@ class QtShell:
             self._visible_before_agent = self.window.isVisible()
             self.window.hide()
         self._call(go)
-        if self.tk is not None:
-            try:
-                self.tk.hide_for_agent()
-            except Exception:
-                pass
 
     def restore_after_agent(self):
         def go():
@@ -127,46 +116,12 @@ class QtShell:
                 self.window.show()
             self._visible_before_agent = False
         self.post(go)
-        if self.tk is not None:
-            try:
-                self.tk.restore_after_agent()
-            except Exception:
-                pass
 
     def quit(self):
         self.post(self.app.quit)
-        if self.tk is not None:
-            try:
-                self.tk.quit()
-            except Exception:
-                pass
 
     def open_classic(self, page):
-        if self.tk is not None:
-            import ui_thread
-            ui_thread.post(self.tk.show, page)
-
-
-def start_tk_thread(controller):
-    """Строит старое окно Tk во втором потоке и возвращает его, когда оно готово."""
-    import app_window
-    box, ready = {}, threading.Event()
-
-    def work():
-        try:
-            box["tk"] = app_window.AppWindow(controller)
-        except Exception as e:
-            box["error"] = e
-            ready.set()
-            return
-        ready.set()
-        box["tk"].run()
-
-    threading.Thread(target=work, name="tk-ui", daemon=True).start()
-    ready.wait(30)
-    if "error" in box:
-        raise box["error"]
-    return box["tk"]
+        pass
 
 
 def available() -> bool:

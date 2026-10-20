@@ -67,6 +67,9 @@ class SettingsBackend:
         mask = config.get("mask_password_fields")
         cur["mask_password_fields"] = True if mask is None else bool(mask)
         cur["gemini_api_keys"] = list(cur.get("gemini_api_keys") or [])
+        import openrouter
+        cur["openrouter_has_key"] = bool(openrouter.get_key())
+        cur.pop("openrouter_key_plain", None)
         return cur
 
     def settings_save(self, values: dict) -> str:
@@ -78,9 +81,9 @@ class SettingsBackend:
         voice_feedback_enabled, voice_wake_enabled, voice_language, voice_device,
         local_model_enabled, local_model_name, telegram_enabled, telegram_approve_in_chat,
         telegram_trusted_auto, telegram_screen_after, telegram_announce, telegram_token ("" = не менять),
-        telegram_clear_token, autostart, ui_theme (dark|light), ui_language, ui_engine (qt|tk),
+        telegram_clear_token, autostart, ui_theme (dark|light), ui_language,
         cloud_files_consent, mask_password_fields.
-        Чего у apply_settings нет (ui_theme, ui_engine, cloud_files_consent, mask_password_fields) —
+        Чего у apply_settings нет (ui_theme, cloud_files_consent, mask_password_fields) —
         пишется напрямую в config.save. Тема Tk («theme») и акцент берутся из ui_theme / текущего конфига."""
         import config
         import i18n
@@ -121,10 +124,17 @@ class SettingsBackend:
         }
         try:
             self.controller.save_settings(full)
-            extra = {"ui_theme": theme_name, "ui_engine": v.get("ui_engine") or config.get("ui_engine") or "qt",
+            extra = {"ui_theme": theme_name, 
                      "cloud_files_consent": bool(v.get("cloud_files_consent")),
                      "mask_password_fields": bool(v.get("mask_password_fields", True))}
             config.save(extra)
+            import openrouter
+            config.save({"openrouter_enabled": bool(v.get("openrouter_enabled")),
+                         "openrouter_model": (v.get("openrouter_model") or "").strip()})
+            if v.get("openrouter_clear_key"):
+                openrouter.set_key("")
+            elif (v.get("openrouter_key") or "").strip():
+                openrouter.set_key(v["openrouter_key"])
         except Exception as e:
             return f"Не удалось сохранить: {e}"
         if full["ui_language"] != old_lang:
@@ -142,6 +152,44 @@ class SettingsBackend:
                 out.append((ok, "..." + (k[-6:] if len(k) >= 6 else k), msg))
             return out
         self._bg(work, lambda r: on_done([(False, "", str(r))] if isinstance(r, Exception) else r))
+
+    def update_check(self, on_done):
+        """on_done(state, text, url): state = new | current | unknown."""
+        import updater
+        self._bg(updater.check, lambda r: on_done(*r) if isinstance(r, tuple) else on_done("unknown", str(r), ""))
+
+    def update_install(self, on_progress, on_done):
+        """Скачивает установщик из последнего релиза и запускает его; программа закрывается. on_done(ok, текст)."""
+        import updater
+
+        def work():
+            rel = updater.latest()
+            if not rel:
+                raise RuntimeError("Релизов нет.")
+            path = updater.download(rel, lambda p: self.post(lambda: on_progress(p)))
+            updater.start_installer(path)
+            return "Установщик запущен — программа закроется."
+
+        def done(r):
+            if isinstance(r, Exception):
+                on_done(False, str(r))
+            else:
+                on_done(True, r)
+                self.controller.quit()
+        self._bg(work, done)
+
+    def update_set_token(self, token):
+        import updater
+        updater.set_token(token)
+
+    def update_has_token(self) -> bool:
+        import updater
+        return updater.has_token()
+
+    def settings_or_models(self, key, on_done):
+        """on_done(ok, [(id, бесплатная, с картинками)] | текст ошибки). Пустой key — взять сохранённый."""
+        import openrouter
+        self._bg(lambda: openrouter.list_models(key or openrouter.get_key()), lambda r: on_done(*r))
 
     def settings_keys_rotation(self) -> list:
         """[(замаскированный ключ, статус)] из key_manager."""
@@ -282,7 +330,7 @@ class StubSettings:
             "voice_feedback_enabled": False, "voice_wake_enabled": False, "voice_language": "ru-RU", "voice_device": "",
             "local_model_enabled": True, "local_model_name": "qwen2.5:3b", "telegram_enabled": True,
             "telegram_approve_in_chat": True, "telegram_trusted_auto": True, "telegram_screen_after": False,
-            "telegram_announce": True, "autostart": True, "ui_theme": "dark", "ui_language": "ru", "ui_engine": "qt",
+            "telegram_announce": True, "autostart": True, "ui_theme": "dark", "ui_language": "ru",
             "cloud_files_consent": False, "mask_password_fields": True, "secure_store": True,
             "telegram_has_token": True, "telegram_status": "работает",
         }
@@ -302,6 +350,24 @@ class StubSettings:
         res = [(i != 1, "..." + k[-6:], "работает" if i != 1 else "Google ответил 429: лимит исчерпан")
                for i, k in enumerate(keys)]
         QTimer.singleShot(300, lambda: on_done(res))
+
+    def update_check(self, on_done):
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(300, lambda: on_done("new", "доступна версия v3.1.0 (у тебя v3.0.0)", ""))
+
+    def update_install(self, on_progress, on_done):
+        on_done(True, "Установщик запущен — программа закроется.")
+
+    def update_set_token(self, token):
+        pass
+
+    def update_has_token(self):
+        return False
+
+    def settings_or_models(self, key, on_done):
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(200, lambda: on_done(True, [("meta-llama/llama-3.2-11b-vision-instruct:free", True, True),
+                                                      ("google/gemma-3-27b-it:free", True, True)]))
 
     def settings_keys_rotation(self):
         return [("AIza…StUv", "готов"), ("AIza…FgFe", "лимит Google, ждёт ~40 c"), ("AQ.A…0123", "готов")]

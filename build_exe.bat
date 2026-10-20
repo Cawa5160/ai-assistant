@@ -32,7 +32,7 @@ python -m PyInstaller --noconfirm --clean --onefile --noconsole ^
   --name AI_Assistant ^
   --icon "assets\app.ico" ^
   --add-data "assets;assets" ^
-  --hidden-import pystray._win32 ^
+  --hidden-import PySide6.QtSvg ^
   --hidden-import pyttsx3.drivers ^
   --hidden-import pyttsx3.drivers.sapi5 ^
   --hidden-import keyring.backends.Windows ^

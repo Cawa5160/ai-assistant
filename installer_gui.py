@@ -36,7 +36,7 @@ STEPS = ["Подготовка", "Компоненты", "Проверка", "Г
 
 REQUIREMENTS = os.path.join(BASE_DIR, "requirements.txt")   # единственный список зависимостей
 # Без этого программа не запустится; остальное (озвучка, уведомления, ключи в хранилище, голос) необязательно.
-CRITICAL = {"pyautogui", "keyboard", "pystray", "pillow", "pyperclip", "psutil", "requests"}
+CRITICAL = {"pyautogui", "keyboard", "pyside6-essentials", "pillow", "pyperclip", "psutil", "requests"}
 IMPORT_NAME = {"pillow": "PIL", "speechrecognition": "speech_recognition", "pyside6-essentials": "PySide6"}
 
 

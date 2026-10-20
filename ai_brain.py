@@ -231,6 +231,24 @@ _gen_lock = threading.RLock()
 
 
 def generate(payload: dict, on_wait=None, cancel=None, max_wait: float = 150.0) -> dict:
+    """Gemini (основная и запасные модели); если совсем не вышло и включён OpenRouter — запрос уходит туда."""
+    try:
+        return _generate_gemini(payload, on_wait, cancel, max_wait)
+    except (LimitError, RuntimeError, ValueError) as first:
+        if (cancel is not None and cancel.is_set()) or "Остановлено" in str(first):
+            raise
+        import openrouter
+        if not openrouter.enabled():
+            raise
+        log(f"Gemini не ответил ({str(first)[:100]}) — пробую OpenRouter.")
+        try:
+            return openrouter.generate(payload, cancel)
+        except Exception as second:
+            log(f"OpenRouter тоже не ответил: {second}")
+            raise first
+
+
+def _generate_gemini(payload: dict, on_wait=None, cancel=None, max_wait: float = 150.0) -> dict:
     """
     Основная модель, а если на ней лимит (дневной/минутный/«limit: 0») или она недоступна —
     запасные модели из Настроек (у каждой модели свой бесплатный лимит).

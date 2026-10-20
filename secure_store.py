@@ -55,3 +55,34 @@ def load_keys():
     except Exception as e:
         _log(f"Не удалось прочитать ключи из защищённого хранилища: {e}")
         return None
+
+
+def get_secret(name: str):
+    """Один произвольный секрет (например, ключ OpenRouter) из защищённого хранилища, либо None."""
+    kr = _get_backend()
+    if not kr:
+        return None
+    try:
+        return kr.get_password(SERVICE, name) or None
+    except Exception as e:
+        _log(f"Не удалось прочитать секрет «{name}»: {e}")
+        return None
+
+
+def set_secret(name: str, value: str) -> bool:
+    """Сохраняет секрет; пустое значение удаляет его. True при успехе."""
+    kr = _get_backend()
+    if not kr:
+        return False
+    try:
+        if value:
+            kr.set_password(SERVICE, name, value)
+        else:
+            try:
+                kr.delete_password(SERVICE, name)
+            except Exception:
+                pass
+        return True
+    except Exception as e:
+        _log(f"Не удалось сохранить секрет «{name}»: {e}")
+        return False
