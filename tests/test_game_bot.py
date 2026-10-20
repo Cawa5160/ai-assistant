@@ -83,6 +83,45 @@ class GameBotTests(unittest.TestCase):
         self.assertGreater(g.turn_angle(750, 790), 120)         # цель справа-внизу — за спиной
         self.assertLess(g.turn_angle(200, 300), 0)
 
+    def test_go_to_arc_when_target_ahead(self):
+        import game_bot as g
+        d = g.sanitize({"actions": [{"action": "go_to", "args": {"x": 600, "y": 300}}]}, 1920, 1080)
+        self.assertEqual([x["action"] for x in d["steps"]], ["move_turn"])
+        self.assertEqual(d["steps"][0]["args"]["key"], "w")
+        self.assertGreater(d["steps"][0]["args"]["seconds"], 1)               # секунды посчитаны сами
+
+    def test_target_parse(self):
+        import game_bot as g
+        d = g.sanitize({"target": {"name": "плита", "x": 700, "y": 600, "state": "REACHED"}}, 100, 100)
+        self.assertEqual(d["target"], {"name": "плита", "x": 700, "y": 600, "state": "reached"})
+        self.assertIsNone(g.sanitize({"target": "мусор"}, 100, 100)["target"])
+
+    def test_target_lock_rejects_switch(self):
+        import threading
+        import game_bot as g
+        calls = []
+
+        def fake(goal, memory, history, note, on_wait=None, cancel=None, target=None):
+            calls.append(target and target["name"])
+            names = ["A", "B", "A", "A"]
+            i = len(calls) - 1
+            if i >= len(names):
+                return {"status": "done", "intent": "", "memory": "", "message": "ок", "steps": [], "target": None}, "x"
+            return {"status": "continue", "intent": "i", "memory": "", "message": "", "steps": [],
+                    "target": {"name": names[i], "x": 1, "y": 1, "state": "approaching"}}, "x"
+        ui = mock.Mock(abort_event=threading.Event())
+        with mock.patch.object(g, "decide", side_effect=fake), \
+                mock.patch.object(g.agent_loop, "_wait_if_paused", return_value=True), \
+                mock.patch.object(g.agent_loop, "_sleep", return_value=True), \
+                mock.patch.object(g.screen_utils, "take_screenshot_image", return_value=None):
+            self.assertEqual(g.run_game("играй", ui, "")[0], True)
+        self.assertEqual(calls[:3], [None, "A", "A"])         # «B» отклонена, держимся «A»
+
+    def test_move_turn_validation(self):
+        import plan_validator as pv
+        self.assertTrue(pv.validate_step({"action": "move_turn", "args": {"dx": 100, "seconds": 1.5, "key": "w"}})[0])
+        self.assertFalse(pv.validate_step({"action": "move_turn", "args": {"dx": 9999, "seconds": 1, "key": "w"}})[0])
+
     def test_sanitize_bad_input(self):
         import game_bot as g
         self.assertEqual(g.sanitize("мусор", 100, 100)["steps"], [])

@@ -98,6 +98,8 @@ def describe_step(step: dict) -> str:
         return f"Ввести текст «{text[:40]}{'…' if len(text) > 40 else ''}»"
     if action == "press_key":
         return f"Нажать клавишу {a.get('key')}"
+    if action == "move_turn":
+        return f"Идти {a.get('seconds')} с, плавно поворачивая камеру ({a.get('dx')})"
     if action == "look":
         return f"Повернуть камеру ({a.get('dx')}, {a.get('dy')})"
     if action == "hold_key":

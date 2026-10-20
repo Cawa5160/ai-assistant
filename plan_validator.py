@@ -24,6 +24,7 @@ ALLOWED_ACTIONS = {
     "press_key": {"key": str},
     "hold_key": {"key": str, "seconds": (int, float)},
     "look": {"dx": (int, float), "dy": (int, float)},
+    "move_turn": {"dx": (int, float), "seconds": (int, float)},
     "hotkey": {"keys": list},
     "create_file": {"path": str},
     "move_file": {"src": str, "dst": str},
@@ -35,6 +36,7 @@ ALLOWED_ACTIONS = {
 OPTIONAL_ARGS = {
     "type_text": {"sensitive": bool},
     "create_file": {"content": str},
+    "move_turn": {"key": str},
 }
 
 POINTER_ACTIONS = ("click", "double_click", "right_click", "move_mouse")
@@ -167,6 +169,13 @@ def validate_step(step):
         dx, dy = args["dx"], args["dy"]
         if dx != dx or dy != dy or abs(dx) > 1500 or abs(dy) > 600:
             return False, "look: допустимо dx до ±1500, dy до ±600 пикселей"
+
+    elif action == "move_turn":
+        dx, sec = args["dx"], args["seconds"]
+        if dx != dx or abs(dx) > 1500 or sec != sec or not (0.1 <= sec <= 10):
+            return False, "move_turn: dx до ±1500, seconds 0.1–10"
+        if str(args.get("key", "w")).lower() not in ALLOWED_KEYS:
+            return False, "move_turn: недопустимая клавиша"
 
     elif action == "hotkey":
         keys = args["keys"]

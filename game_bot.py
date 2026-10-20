@@ -19,7 +19,8 @@ import screen_utils
 from logger import log
 
 MAX_ACTIONS = 6
-GAME_ACTIONS = {"go_to", "click", "double_click", "right_click", "move_mouse", "press_key", "hold_key", "look", "wait", "scroll"}
+MAX_TARGET_STEPS = 12      # сколько шагов даём на одну цель, потом считаем её неудавшейся
+GAME_ACTIONS = {"go_to", "move_turn", "click", "double_click", "right_click", "move_mouse", "press_key", "hold_key", "look", "wait", "scroll"}
 NOT_A_GAME = {"python.exe", "pythonw.exe", "explorer.exe", "cmd.exe", "powershell.exe", "windowsterminal.exe", ""}
 
 # «играй в …», «поиграй …», «грай у …», «play …»
@@ -32,6 +33,7 @@ GAME_PROMPT = """Ты — игровой бот: играешь в игру ЗА
 {
   "status": "continue" | "done" | "fail",
   "intent": "коротко по-русски: что делаешь и зачем",
+  "target": {"name": "что за цель, коротко", "x": 0..1000, "y": 0..1000, "state": "approaching" | "reached" | "lost"},
   "memory": "до 300 символов: что уже сделано, что дальше, где что находится (это твои заметки на следующий шаг)",
   "actions": [ {"action": "...", "args": {...}} ],
   "message": "итог (только для done/fail)"
@@ -46,7 +48,12 @@ GAME_PROMPT = """Ты — игровой бот: играешь в игру ЗА
 - scroll {"amount": -5..5}                 — колесо (в играх — приближение камеры)
 - wait {"seconds": 1}                      — подождать (до 3 с), например пока копятся деньги
 
+КООРДИНАТЫ: на кадре нарисована сетка (подписи 200…800, жёлтым), голубое кольцо ◎ — персонаж (500, 570), голубая черта — куда смотрит камера,
+оранжевые эллипсы — примерное время ходьбы до точки: 1c, 2c, 3c. Координаты x,y бери по сетке.
+
 ПРАВИЛА:
+0. ФИКСАЦИЯ НА ЦЕЛИ: в каждый момент у тебя ОДНА цель (поле target). Не меняй её, пока не дойдёшь (state "reached") или не поймёшь, что она недостижима ("lost").
+   Каждый шаг заново найди ту же цель на кадре и обнови её x,y. Пока цель не достигнута — никаких других дел. Seconds в go_to можно не указывать: время ходьбы посчитается само.
 1. Опирайся только на то, что ВИДНО на скриншоте. Не выдумывай элементы.
 2. Короткие движения: ходьба 0.5–2 с, потом новый скриншот. Лучше больше коротких шагов, чем один длинный.
 3. Клик по окну/кнопке меню игры — последним действием шага, если после него экран сильно меняется.
@@ -96,6 +103,12 @@ def turn_angle(x: float, y: float) -> float:
     return math.degrees(math.atan2(x - CHAR_XY[0], CHAR_XY[1] - y))
 
 
+def walk_seconds(x: float, y: float) -> float:
+    """Сколько секунд идти до точки кадра (грубо: перспектива сжимает «вглубь» кадра, ~220 единиц сетки в секунду)."""
+    d = math.hypot(x - CHAR_XY[0], (CHAR_XY[1] - y) / 0.6)
+    return round(min(max(d / 220.0, 0.4), 4.0), 2)
+
+
 def is_tycoon(goal: str) -> bool:
     return bool(re.search(r"тайкун|тайк[оу]н|tycoon|роблокс|roblox|робло[кх]с", goal or "", re.I))
 
@@ -106,9 +119,16 @@ def is_play_command(text: str) -> bool:
 
 def sanitize(raw, screen_w: int, screen_h: int, tycoon: bool = False) -> dict:
     """Сырой ответ модели -> {'status','intent','memory','message','steps'}: только допустимые игровые шаги."""
-    out = {"status": "continue", "intent": "", "memory": "", "message": "", "steps": []}
+    out = {"status": "continue", "intent": "", "memory": "", "message": "", "steps": [], "target": None}
     if not isinstance(raw, dict):
         return out
+    t = raw.get("target")
+    if isinstance(t, dict) and t.get("name"):
+        try:
+            out["target"] = {"name": str(t["name"])[:60], "x": int(float(t.get("x", 500))), "y": int(float(t.get("y", 500))),
+                             "state": str(t.get("state", "approaching")).lower()}
+        except (TypeError, ValueError):
+            out["target"] = None
     if raw.get("status") in ("continue", "done", "fail"):
         out["status"] = raw["status"]
     out["intent"] = str(raw.get("intent", ""))[:200]
@@ -144,10 +164,15 @@ def sanitize(raw, screen_w: int, screen_h: int, tycoon: bool = False) -> dict:
             key = str(raw_args.get("dir") or "w").lower()
             if key not in ("w", "a", "s", "d"):
                 key = "w"
+            if "seconds" not in raw_args:
+                sec = walk_seconds(gx, gy)
             if key == "w":
                 theta = turn_angle(gx, gy)                 # на сколько градусов повернуть камеру (+ вправо, ±180 — цель за спиной)
                 dx = int(max(-1200, min(1200, theta / float(config.get("game_deg_per_px") or 0.3))))
-                if abs(dx) > 15:
+                if abs(dx) > 15 and abs(theta) <= 60:      # цель впереди-сбоку: плавная дуга (идём и поворачиваем одновременно)
+                    out["steps"].append({"action": "move_turn", "args": {"dx": dx, "seconds": round(max(sec, 0.3), 2), "key": "w"}})
+                    continue
+                if abs(dx) > 15:                           # цель сбоку/сзади: сначала плавно разворачиваемся
                     out["steps"].append({"action": "look", "args": {"dx": dx, "dy": 0}})
             out["steps"].append({"action": "hold_key", "args": {"key": key, "seconds": round(sec, 2)}})
             continue
@@ -168,12 +193,57 @@ def sanitize(raw, screen_w: int, screen_h: int, tycoon: bool = False) -> dict:
     return out
 
 
-def decide(goal: str, memory: str, history: list, note: str, on_wait=None, cancel=None):
-    shot, _ = screen_utils.take_screenshot(max_width=1024, mask=False)
+def grab_overlay(width: int = 1024):
+    """Кадр игры с «системой координат»: сетка 0..1000, отметка персонажа и кольца времени ходьбы. -> base64 JPEG."""
+    import base64
+    import io
+    import pyautogui
+    from PIL import Image, ImageDraw
+    img = pyautogui.screenshot().convert("RGBA")
+    h = int(img.height * width / img.width)
+    img = img.resize((width, h), Image.BILINEAR)
+    ov = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(ov)
+    X = lambda u: u / 1000 * (width - 1)
+    Y = lambda v: v / 1000 * (h - 1)
+    for u in range(100, 1000, 100):
+        a = 90 if u % 500 == 0 else 45
+        d.line([(X(u), 0), (X(u), h)], fill=(255, 255, 255, a), width=1)
+        d.line([(0, Y(u)), (width, Y(u))], fill=(255, 255, 255, a), width=1)
+    for u in range(200, 1000, 200):
+        d.text((X(u) + 2, 2), str(u), fill=(255, 255, 0, 230))
+        d.text((2, Y(u) + 2), str(u), fill=(255, 255, 0, 230))
+    cx, cy = CHAR_XY
+    for sec, rx in ((1, 220), (2, 440), (3, 660)):
+        ry = rx * 0.6
+        d.ellipse([X(cx - rx), Y(cy - ry), X(cx + rx), Y(cy + ry)], outline=(255, 160, 0, 170), width=1)
+        d.text((X(cx + rx) - 22, Y(cy) - 12), f"{sec}c", fill=(255, 160, 0, 255))
+    d.ellipse([X(cx) - 7, Y(cy) - 7, X(cx) + 7, Y(cy) + 7], outline=(0, 255, 255, 255), width=2)
+    d.line([(X(cx), Y(cy) - 16), (X(cx), Y(cy) - 60)], fill=(0, 255, 255, 220), width=2)     # куда «смотрит» камера
+    img = Image.alpha_composite(img, ov).convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=70)
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def _target_block(target) -> str:
+    if not target:
+        return "\nТЕКУЩАЯ ЦЕЛЬ: нет — выбери одну конкретную цель и верни её в поле target.\n"
+    return (f"\nТЕКУЩАЯ ЦЕЛЬ (ДЕРЖИСЬ ЕЁ, пока не дойдёшь): «{target['name']}», последние координаты ({target['x']}, {target['y']}), "
+            f"шаг {target['steps']} из {MAX_TARGET_STEPS}. Верни её в target с обновлёнными x,y и state: "
+            f"\"approaching\" (иду), \"reached\" (дошёл/сделал), \"lost\" (цели не видно/недостижима).\n")
+
+
+def decide(goal: str, memory: str, history: list, note: str, on_wait=None, cancel=None, target=None):
+    try:
+        shot = grab_overlay()
+    except Exception as e:
+        log(f"Игровой режим: сетка не нарисовалась ({type(e).__name__}) — шлю обычный кадр")
+        shot, _ = screen_utils.take_screenshot(max_width=1024, mask=False)
     w, h = screen_utils.get_screen_size()
     hist = "\n".join(f"- {x}" for x in history[-6:]) or "(пока ничего)"
     prompt = (f"{GAME_PROMPT}{TYCOON_HINT if is_tycoon(goal) else ''}\n\nЦЕЛЬ: {goal}\n\nЗАМЕТКИ О ПРОГРЕССЕ: {memory or '(пусто — игра только началась)'}\n\n"
-              f"ИСТОРИЯ:\n{hist}\n{note}\nТекущий скриншот приложен.")
+              f"ИСТОРИЯ:\n{hist}\n{_target_block(target)}{note}\nТекущий скриншот приложен.")
     payload = {"contents": [{"role": "user", "parts": [
         {"text": prompt}, {"inline_data": {"mime_type": "image/jpeg", "data": shot}}]}],
         "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1536, "responseMimeType": "application/json"}}
@@ -204,6 +274,8 @@ def run_game(goal: str, ui, game_process: str):
     delay = float(config.get("game_step_delay") or 0.3)
     started = time.time()
     memory, history = "", []
+    target = None
+    rejects = 0
     n = still = idle = 0
     away_since = None
     last_sig = None
@@ -237,13 +309,32 @@ def run_game(goal: str, ui, game_process: str):
         if len(history) >= 3 and len({h.split(" → ")[0] for h in history[-3:]}) == 1:
             note += "\nВНИМАНИЕ: ты повторяешь одно и то же уже 3 шага. Смени цель или способ.\n"
         try:
-            dec, _shot = decide(goal, memory, history, note, on_wait=waiting, cancel=ui.abort_event)
+            dec, _shot = decide(goal, memory, history, note, on_wait=waiting, cancel=ui.abort_event, target=target)
         except (ValueError, RuntimeError) as e:
             return False, str(e)
         except Exception as e:
             return False, f"Ошибка обращения к ИИ: {e}"
         n += 1
         memory = dec["memory"] or memory
+        t = dec.get("target")
+        if t:
+            if t["state"] in ("reached", "lost"):
+                history.append(f"цель «{t['name']}»: {t['state']}")
+                target, rejects = None, 0
+            elif target is None:
+                target = {"name": t["name"], "x": t["x"], "y": t["y"], "steps": 1}
+            elif t["name"].strip().lower() == target["name"].strip().lower():
+                target.update(x=t["x"], y=t["y"], steps=target["steps"] + 1)
+            elif rejects < 2:                      # сменил цель, не закончив старую — не даём
+                rejects += 1
+                history.append(f"отклонена смена цели на «{t['name']}»: сначала «{target['name']}»")
+                ui.set_result(f"🎯 Держусь цели: «{target['name']}»")
+                continue
+            else:
+                target, rejects = {"name": t["name"], "x": t["x"], "y": t["y"], "steps": 1}, 0
+            if target and target["steps"] > MAX_TARGET_STEPS:
+                history.append(f"цель «{target['name']}» не вышла за {MAX_TARGET_STEPS} шагов — бросаю")
+                target = None
         ui.add_step(n, dec["intent"] or "Играю")
         if not dec["steps"] and dec["status"] in ("done", "fail"):
             return dec["status"] == "done", dec["message"] or ("Готово." if dec["status"] == "done" else "ИИ не смог продолжить.")

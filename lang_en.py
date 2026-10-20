@@ -1106,3 +1106,6 @@ TR.update({'Игровой режим': 'Game mode', 'Переключись в 
 
 
 TR.update({'Переключись в игру — начну через 5 секунд.': "Switch to the game — I'll start in 5 seconds.", 'Остановить: кнопка 🛑 или резкий рывок мыши в левый верхний угол. В онлайн-играх автоклики могут нарушать правила — риск бана на тебе. После «Начать» есть 5 секунд, чтобы переключиться в игру.': 'Stop: the 🛑 button or a quick mouse jerk to the top-left corner. In online games auto-clicking may break the rules — the ban risk is yours. After “Start” you have 5 seconds to switch to the game.'})
+
+
+TR.update({'🎯 Держусь цели:': '🎯 Sticking to the target:'})

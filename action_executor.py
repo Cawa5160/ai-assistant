@@ -294,19 +294,55 @@ def hold_key(key: str, seconds: float):
         pyautogui.keyUp(key)
 
 
-def _look_mouse(dx: int, dy: int):
-    """Камера мышью: правая кнопка зажата + относительное движение."""
+def _eased_turn(dx: int, dy: int, total: float):
+    """Плавный поворот камеры: правая кнопка зажата, относительный сдвиг по кривой smoothstep (разгон и торможение)."""
     import ctypes
     u = ctypes.windll.user32
     u.mouse_event(0x0008, 0, 0, 0, 0)                 # правая кнопка вниз
     try:
-        time.sleep(0.05)
-        steps = max(1, int(max(abs(dx), abs(dy)) / 20))
-        for _ in range(steps):
-            u.mouse_event(0x0001, int(dx / steps), int(dy / steps), 0, 0)
-            time.sleep(0.012)
+        time.sleep(0.03)
+        n = max(6, int(total / 0.012))
+        px = py = 0
+        for i in range(1, n + 1):
+            t = i / n
+            e = t * t * (3 - 2 * t)
+            cx, cy = round(dx * e), round(dy * e)
+            if cx != px or cy != py:
+                u.mouse_event(0x0001, cx - px, cy - py, 0, 0)
+                px, py = cx, cy
+            time.sleep(total / n)
     finally:
         u.mouse_event(0x0010, 0, 0, 0, 0)             # правая кнопка вверх
+
+
+def _turn_duration(dx: int, dy: int = 0) -> float:
+    return max(0.25, min(1.2, max(abs(dx), abs(dy)) / 700.0))
+
+
+def _look_mouse(dx: int, dy: int):
+    _eased_turn(dx, dy, _turn_duration(dx, dy))
+
+
+def move_turn(dx: int, seconds: float, key: str = "w"):
+    """Идёт и одновременно плавно поворачивает камеру (дуга, а не «поворот на месте → рывок вперёд»)."""
+    seconds = max(0.1, min(float(seconds), 10.0))
+    log(f"Иду {key} {seconds} с с поворотом камеры dx={dx}")
+    if str(config.get("game_camera_mode") or "mouse") == "keys":
+        look(dx, 0)
+        return hold_key(key, seconds)
+    kb = _scancode_key(key)
+    if kb is None:
+        _look_mouse(dx, 0)
+        return hold_key(key, seconds)
+    turn = min(_turn_duration(dx), seconds)
+    kb.press(key)
+    try:
+        _eased_turn(dx, 0, turn)
+        rest = seconds - turn
+        if rest > 0:
+            time.sleep(rest)
+    finally:
+        kb.release(key)
 
 
 def look(dx: int, dy: int):
@@ -388,6 +424,8 @@ def run_step(step: dict):
         hold_key(args["key"], args["seconds"])
     elif action == "look":
         look(int(args["dx"]), int(args["dy"]))
+    elif action == "move_turn":
+        move_turn(int(args["dx"]), args["seconds"], args.get("key", "w"))
     elif action == "hotkey":
         hotkey(*args["keys"])
     elif action == "scroll":
