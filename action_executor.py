@@ -294,20 +294,33 @@ def hold_key(key: str, seconds: float):
         pyautogui.keyUp(key)
 
 
-def look(dx: int, dy: int):
-    """Поворот камеры в играх: правая кнопка мыши зажата + относительное движение мыши (как делает человек)."""
+def _look_mouse(dx: int, dy: int):
+    """Камера мышью: правая кнопка зажата + относительное движение."""
     import ctypes
-    log(f"Поворачиваю камеру: dx={dx}, dy={dy}")
     u = ctypes.windll.user32
     u.mouse_event(0x0008, 0, 0, 0, 0)                 # правая кнопка вниз
     try:
         time.sleep(0.05)
         steps = max(1, int(max(abs(dx), abs(dy)) / 20))
-        for i in range(steps):
-            u.mouse_event(0x0001, int(dx / steps), int(dy / steps), 0, 0)   # относительный сдвиг
+        for _ in range(steps):
+            u.mouse_event(0x0001, int(dx / steps), int(dy / steps), 0, 0)
             time.sleep(0.012)
     finally:
         u.mouse_event(0x0010, 0, 0, 0, 0)             # правая кнопка вверх
+
+
+def look(dx: int, dy: int):
+    """Поворот камеры в играх. По горизонтали — стрелки ←/→ (в Roblox они крутят камеру с постоянной скоростью,
+    так точнее, чем мышь); по вертикали — мышь. Режим 'mouse' в настройке game_camera_mode — всё мышью."""
+    log(f"Поворачиваю камеру: dx={dx}, dy={dy}")
+    if str(config.get("game_camera_mode") or "keys") == "mouse":
+        return _look_mouse(dx, dy)
+    if abs(dx) >= 8:
+        deg = abs(dx) * 0.3                           # 1 пиксель мыши ≈ 0.3°
+        rate = float(config.get("game_camera_rate") or 90)   # °/с у стрелок
+        hold_key("right" if dx > 0 else "left", max(0.05, min(deg / rate, 3.0)))
+    if abs(dy) >= 8:
+        _look_mouse(0, dy)
 
 
 def hotkey(*keys):

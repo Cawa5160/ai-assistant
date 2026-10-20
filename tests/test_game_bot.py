@@ -45,7 +45,7 @@ class GameBotTests(unittest.TestCase):
         import game_bot as g
         d = g.sanitize({"actions": [{"action": "go_to", "args": {"x": 900, "y": 500, "seconds": 2}}]}, 1920, 1080)
         self.assertEqual([x["action"] for x in d["steps"]], ["look", "hold_key"])
-        self.assertEqual(d["steps"][0]["args"]["dx"], 100)
+        self.assertEqual(d["steps"][0]["args"]["dx"], 132)
         self.assertEqual(d["steps"][1]["args"], {"key": "w", "seconds": 2.0})
         d = g.sanitize({"actions": [{"action": "go_to", "args": {"x": 510, "y": 500, "seconds": 9}}]}, 1920, 1080)
         self.assertEqual([x["action"] for x in d["steps"]], ["hold_key"])       # почти прямо — без поворота
@@ -60,6 +60,22 @@ class GameBotTests(unittest.TestCase):
         import game_bot as g
         self.assertTrue(g.is_tycoon("играй в роблокс тайкун"))
         self.assertFalse(g.is_tycoon("играй в шахматы"))
+
+    def test_forbidden_keys_and_click_zone(self):
+        import game_bot as g
+        d = g.sanitize({"actions": [{"action": "press_key", "args": {"key": "esc"}},
+                                    {"action": "press_key", "args": {"key": "e"}},
+                                    {"action": "click", "args": {"x": 50, "y": 50}},
+                                    {"action": "click", "args": {"x": 500, "y": 500}}]}, 1920, 1080, tycoon=True)
+        self.assertEqual([x["action"] for x in d["steps"]], ["hold_key", "click"])
+        self.assertEqual(d["steps"][0]["args"]["key"], "e")
+        d2 = g.sanitize({"actions": [{"action": "click", "args": {"x": 50, "y": 50}}]}, 1920, 1080, tycoon=False)
+        self.assertEqual(len(d2["steps"]), 1)
+
+    def test_go_to_strafe(self):
+        import game_bot as g
+        d = g.sanitize({"actions": [{"action": "go_to", "args": {"x": 900, "y": 500, "seconds": 1, "dir": "d"}}]}, 1920, 1080)
+        self.assertEqual([(x["action"], x["args"].get("key")) for x in d["steps"]], [("hold_key", "d")])
 
     def test_sanitize_bad_input(self):
         import game_bot as g
