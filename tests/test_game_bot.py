@@ -133,7 +133,7 @@ class GameBotTests(unittest.TestCase):
                 self.assertTrue(steps)
                 for st in steps:
                     self.assertTrue(pv.validate_step(st)[0], st)
-        self.assertEqual(g.escape_steps(1, 1)[0]["args"]["key"], "space")
+        self.assertEqual(g.escape_steps(1, 1)[0]["action"], "hop_forward")
         self.assertEqual(g.escape_steps(2, 1)[1]["args"]["key"], "d")
         self.assertEqual(g.escape_steps(2, -1)[1]["args"]["key"], "a")
 

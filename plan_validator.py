@@ -24,6 +24,7 @@ ALLOWED_ACTIONS = {
     "press_key": {"key": str},
     "hold_key": {"key": str, "seconds": (int, float)},
     "look": {"dx": (int, float), "dy": (int, float)},
+    "hop_forward": {"seconds": (int, float)},
     "move_turn": {"dx": (int, float), "seconds": (int, float)},
     "hotkey": {"keys": list},
     "create_file": {"path": str},
@@ -169,6 +170,11 @@ def validate_step(step):
         dx, dy = args["dx"], args["dy"]
         if dx != dx or dy != dy or abs(dx) > 1500 or abs(dy) > 600:
             return False, "look: допустимо dx до ±1500, dy до ±600 пикселей"
+
+    elif action == "hop_forward":
+        sec = args["seconds"]
+        if sec != sec or not (0.2 <= sec <= 6):
+            return False, "hop_forward: допустимо от 0.2 до 6 секунд"
 
     elif action == "move_turn":
         dx, sec = args["dx"], args["seconds"]

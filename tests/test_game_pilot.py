@@ -80,6 +80,14 @@ class PilotMathTests(unittest.TestCase):
         t2.shift(300)                                          # камера повернулась: ожидаем цель правее
         self.assertAlmostEqual(t2.px, 100 + 0.3 * 319, delta=1)
 
+    def test_climb_kind_and_hop_validation(self):
+        import game_pilot as gp
+        import plan_validator as pv
+        d = gp.parse_decision({"target": {"name": "лестница", "x": 800, "y": 500, "kind": "climb"}})
+        self.assertEqual(d["target"]["kind"], "climb")
+        self.assertTrue(pv.validate_step({"action": "hop_forward", "args": {"seconds": 1.5}})[0])
+        self.assertFalse(pv.validate_step({"action": "hop_forward", "args": {"seconds": 30}})[0])
+
     def test_near(self):
         import game_pilot as gp
         self.assertTrue(gp.near(520, 600))

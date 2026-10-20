@@ -116,18 +116,21 @@ def mask_center(img):
 
 
 def escape_steps(level: int, side: int) -> list:
-    """Автоматический обход препятствия без запроса к ИИ. level — сколько раз подряд не сдвинулись, side — ±1 (чередуется).
-    1: прыжок вперёд; 2: назад + боком + вперёд; 3: поворот на 90° и вперёд; 4+: назад, разворот и вперёд."""
+    """Автоматический обход препятствия без запроса к ИИ. level — сколько раз подряд не продвинулись, side — ±1 (чередуется).
+    1: бег вперёд с прыжками (лестница, уступ); 2: назад + боком + вперёд; 3: поворот на 90° и бег с прыжками;
+    4+: назад, разворот и вперёд."""
     key = "d" if side > 0 else "a"
+    dpp = float(config.get("game_deg_per_px") or 0.45)
     hk = lambda k, sec: {"action": "hold_key", "args": {"key": k, "seconds": sec}}
     lk = lambda dx: {"action": "look", "args": {"dx": dx, "dy": 0}}
+    hop = lambda sec: {"action": "hop_forward", "args": {"seconds": sec}}
     if level <= 1:
-        return [hk("space", 0.15), hk("w", 0.9)]
+        return [hop(1.6)]
     if level == 2:
-        return [hk("s", 0.4), hk(key, 1.0), hk("w", 1.2)]
+        return [hk("s", 0.4), hk(key, 0.9), hk("w", 1.2)]
     if level == 3:
-        return [lk(int(90 * side / float(config.get("game_deg_per_px") or 0.45))), hk("w", 1.5)]
-    return [hk("s", 0.6), lk(int(150 * side / float(config.get("game_deg_per_px") or 0.45))), hk("w", 1.5)]
+        return [lk(int(90 * side / dpp)), hop(1.5)]
+    return [hk("s", 0.6), lk(int(150 * side / dpp)), hk("w", 1.5)]
 
 
 def walk_seconds(x: float, y: float) -> float:

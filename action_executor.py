@@ -345,6 +345,24 @@ def move_turn(dx: int, seconds: float, key: str = "w"):
         kb.release(key)
 
 
+def hop_forward(seconds: float):
+    """Бег вперёд с прыжками (лестницы, уступы, бордюры): w зажата, пробел нажимается каждые ~0.45 с."""
+    seconds = max(0.2, min(float(seconds), 6.0))
+    log(f"Бегу вперёд с прыжками {seconds} с")
+    kb = _scancode_key("w")
+    press = kb.press if kb is not None else pyautogui.keyDown
+    release = kb.release if kb is not None else pyautogui.keyUp
+    tap = (lambda k: kb.send(k)) if kb is not None else pyautogui.press
+    press("w")
+    try:
+        end = time.time() + seconds
+        while time.time() < end:
+            tap("space")
+            time.sleep(min(0.45, max(0.0, end - time.time())))
+    finally:
+        release("w")
+
+
 def look(dx: int, dy: int):
     """Поворот камеры в играх. По горизонтали — стрелки ←/→ (в Roblox они крутят камеру с постоянной скоростью,
     так точнее, чем мышь); по вертикали — мышь. Режим 'mouse' в настройке game_camera_mode — всё мышью."""
@@ -422,6 +440,8 @@ def run_step(step: dict):
         press_key(args["key"])
     elif action == "hold_key":
         hold_key(args["key"], args["seconds"])
+    elif action == "hop_forward":
+        hop_forward(args["seconds"])
     elif action == "look":
         look(int(args["dx"]), int(args["dy"]))
     elif action == "move_turn":

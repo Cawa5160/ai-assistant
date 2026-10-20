@@ -33,12 +33,12 @@ PILOT_PROMPT = """Ты — «глаза» игрового бота: играе�
   "status": "continue" | "done" | "fail",
   "intent": "коротко по-русски: куда и зачем",
   "memory": "до 300 символов: что уже сделано, что дальше (твои заметки)",
-  "target": {"name": "что это, коротко", "x": 0..1000, "y": 0..1000, "kind": "step_on" | "interact" | "go"},
+  "target": {"name": "что это, коротко", "x": 0..1000, "y": 0..1000, "kind": "step_on" | "interact" | "go" | "climb"},
   "turn": 0,
   "message": "итог (только для done/fail)"
 }
 - target — конкретная точка на кадре, куда нужно прийти (для плиты/кнопки на полу — её центр; для терминала/NPC/сундука — подножие объекта).
-  kind: "step_on" — встать на неё ногами (плита, кнопка, зона); "interact" — дойти и нажать e (сборщик, NPC, дверь, сундук); "go" — просто дойти.
+  kind: "step_on" — встать на неё ногами (плита, кнопка, зона); "interact" — дойти и нажать e (сборщик, NPC, дверь, сундук); "go" — просто дойти; "climb" — идти вверх/вперёд с прыжками (лестница, склон, уступы, бордюры).
 - Если нужной цели на кадре НЕТ: target = null и "turn" = на сколько градусов повернуть камеру, чтобы осмотреться (например 90 или -90).
   Не осматривайся больше 3 раз подряд: потом выбери любую точку по направлению зелёных стрелок/дороги/открытого пространства (kind "go").
 КООРДИНАТЫ: на кадре сетка (подписи 200…800), голубое кольцо ◎ — персонаж (500, 570), оранжевые эллипсы — время ходьбы 1c/2c/3c. x,y бери по сетке.
@@ -137,7 +137,7 @@ def parse_decision(raw) -> dict:
             if 0 <= x <= 1000 and 0 <= y <= 1000:
                 kind = str(t.get("kind", "go")).lower()
                 out["target"] = {"name": str(t.get("name", "цель"))[:60], "x": x, "y": y,
-                                 "kind": kind if kind in ("step_on", "interact", "go") else "go"}
+                                 "kind": kind if kind in ("step_on", "interact", "go", "climb") else "go"}
         except (TypeError, ValueError):
             pass
     return out
@@ -173,6 +173,7 @@ def follow(target: dict, ui, game_process: str, depth=None):
     turn_ticks = 0
     avoid_ticks = 0
     last_dump = 0.0
+    best_dist, best_t = None, time.time()
     while time.time() - t0 < MAX_FOLLOW_SECONDS:
         if ui.abort_event.is_set():
             return "stopped"
@@ -196,8 +197,15 @@ def follow(target: dict, ui, game_process: str, depth=None):
         x, y, conf = pos
         last_near = near(x, y)
         near_ticks = near_ticks + 1 if last_near else 0
-        if near_ticks >= 2 and target["kind"] != "go" or near_ticks >= 1 and target["kind"] == "go":
+        if near_ticks >= 2 and target["kind"] in ("step_on", "interact") or near_ticks >= 1 and target["kind"] in ("go", "climb"):
             return "reached"
+        # watchdog прогресса: шли, а до цели не стало ближе — скользим вдоль стены или упёрлись
+        dist = math.hypot(x - CHAR_XY[0], (CHAR_XY[1] - y) / 0.6)
+        if best_dist is None or dist < best_dist - 12:
+            best_dist, best_t = dist, time.time()
+        elif prev_walked and time.time() - best_t > 2.0:
+            stuck = max(stuck, 2)
+            best_t = time.time()
         # застряли? шли, а мир не сдвинулся
         if prev_walked and not game_vision.world_moved(prev, frame):
             stuck += 1
@@ -254,6 +262,9 @@ def follow(target: dict, ui, game_process: str, depth=None):
             prev_walked = False
         elif mode == "arc":
             _do({"action": "move_turn", "args": {"dx": dx, "seconds": TICK, "key": "w"}})
+            prev_walked = True
+        elif target["kind"] == "climb":
+            _do({"action": "hop_forward", "args": {"seconds": 0.5}})
             prev_walked = True
         else:
             _hk("w", TICK)
