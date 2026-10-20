@@ -80,6 +80,8 @@ TYCOON_HINT = """
 - НИКОГДА не подходи и не нажимай: цены в R$ / значок Robux, «Магазин», «Shop», «Gamepass», «Premium», «VIP», ящики и ускорители за R$, таймер-акции, верхнюю панель Roblox (меню, чат, настройки), «Session Rewards», «Награда», «Колесо». Если появилось окно подтверждения покупки — ничего не подтверждай (только «Отмена»).
 - Нажимай ТОЛЬКО то, что нужно для цикла «собрать → купить»: касание плит ногами и e/клик по сборщику. Остальные кнопки интерфейса (левые панели, правые значки, верхняя панель) — не твои.
 - Мелкая подгонка к плите: иди боком (go_to с dir a/d или hold_key a/d), не крути камеру ради пары шагов.
+- Купленная плита исчезает; следующие появляются дальше — иди по зелёным стрелкам на полу к следующей ЗЕЛЁНОЙ плите (ближайшей). Не видишь зелёных плит — иди по стрелкам или к сборщику денег (там копятся деньги на следующие покупки).
+- Если ты упёрся (экран не меняется), программа сама сделает обход (прыжок, шаг назад и вбок, поворот) и в истории напишет «автообход» — после него заново выбери путь, не повторяй тот же go_to.
 - Не стой на месте и не крути камеру без дела: каждый шаг должен приближать к сборщику денег или к кнопке покупки.
 """
 
@@ -101,6 +103,30 @@ CHAR_XY = (500, 570)     # где на кадре стоит персонаж (�
 def turn_angle(x: float, y: float) -> float:
     """Угол (в градусах) от направления камеры («вверх» по кадру) к точке (x, y) на кадре. Всё ниже персонажа — позади него."""
     return math.degrees(math.atan2(x - CHAR_XY[0], CHAR_XY[1] - y))
+
+
+def mask_center(img):
+    """Закрашивает область вокруг персонажа (его анимация ходьбы не должна считаться «экран изменился»)."""
+    from PIL import ImageDraw
+    im = img.copy()
+    w, h = im.size
+    ImageDraw.Draw(im).rectangle([w * 0.30, h * 0.30, w * 0.70, h * 0.80], fill=0)
+    return im
+
+
+def escape_steps(level: int, side: int) -> list:
+    """Автоматический обход препятствия без запроса к ИИ. level — сколько раз подряд не сдвинулись, side — ±1 (чередуется).
+    1: прыжок вперёд; 2: назад + боком + вперёд; 3: поворот на 90° и вперёд; 4+: назад, разворот и вперёд."""
+    key = "d" if side > 0 else "a"
+    hk = lambda k, sec: {"action": "hold_key", "args": {"key": k, "seconds": sec}}
+    lk = lambda dx: {"action": "look", "args": {"dx": dx, "dy": 0}}
+    if level <= 1:
+        return [hk("space", 0.15), hk("w", 0.9)]
+    if level == 2:
+        return [hk("s", 0.4), hk(key, 1.0), hk("w", 1.2)]
+    if level == 3:
+        return [lk(int(90 * side / float(config.get("game_deg_per_px") or 0.45))), hk("w", 1.5)]
+    return [hk("s", 0.6), lk(int(150 * side / float(config.get("game_deg_per_px") or 0.45))), hk("w", 1.5)]
 
 
 def walk_seconds(x: float, y: float) -> float:
@@ -168,7 +194,9 @@ def sanitize(raw, screen_w: int, screen_h: int, tycoon: bool = False) -> dict:
                 sec = walk_seconds(gx, gy)
             if key == "w":
                 theta = turn_angle(gx, gy)                 # на сколько градусов повернуть камеру (+ вправо, ±180 — цель за спиной)
-                dx = int(max(-1200, min(1200, theta / float(config.get("game_deg_per_px") or 0.3))))
+                # крутим только часть угла (game_turn_fraction): ошибка калибровки не даёт перекрутить, а недокрут исправится на следующем кадре
+                dx = int(max(-700, min(700, theta * float(config.get("game_turn_fraction") or 0.7)
+                                       / float(config.get("game_deg_per_px") or 0.45))))
                 if abs(dx) > 15 and abs(theta) <= 60:      # цель впереди-сбоку: плавная дуга (идём и поворачиваем одновременно)
                     out["steps"].append({"action": "move_turn", "args": {"dx": dx, "seconds": round(max(sec, 0.3), 2), "key": "w"}})
                     continue
@@ -276,6 +304,7 @@ def run_game(goal: str, ui, game_process: str):
     memory, history = "", []
     target = None
     rejects = 0
+    esc_n, esc_side = 0, 1
     n = still = idle = 0
     away_since = None
     last_sig = None
@@ -364,10 +393,25 @@ def run_game(goal: str, ui, game_process: str):
         changed = True
         if before is not None:
             try:
-                changed = screen_utils.screens_differ(before, screen_utils.take_screenshot_image(), agent_loop.CHANGE_THRESHOLD)
+                changed = screen_utils.screens_differ(mask_center(before), mask_center(screen_utils.take_screenshot_image()),
+                                                      agent_loop.CHANGE_THRESHOLD)
             except Exception:
                 changed = True
         still = 0 if changed else still + 1
+        if changed:
+            esc_n = 0
+        elif walked:                                   # шли, а мир не сдвинулся — упёрлись: обходим сами, не дожидаясь ИИ
+            esc_n += 1
+            esc_side = -esc_side
+            steps = escape_steps(esc_n, esc_side)
+            results.append(f"упёрся — автообход (попытка {esc_n})")
+            for st in steps:
+                if ui.abort_event.is_set() or (game_process and _foreground() != game_process):
+                    break
+                try:
+                    action_executor.run_step(st)
+                except Exception as e:
+                    log(f"Игровой режим: обход не удался: {e}")
         history.append(f"{dec['intent']} → {'; '.join(results) or 'ничего'} ({'экран изменился' if changed else 'экран не менялся'})")
         ui.set_result(f"{'; '.join(results)}")
         if sig == last_sig and not changed and still >= 20:

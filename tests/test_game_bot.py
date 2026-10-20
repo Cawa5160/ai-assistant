@@ -45,7 +45,7 @@ class GameBotTests(unittest.TestCase):
         import game_bot as g
         d = g.sanitize({"actions": [{"action": "go_to", "args": {"x": 900, "y": 500, "seconds": 2}}]}, 1920, 1080)
         self.assertEqual([x["action"] for x in d["steps"]], ["look", "hold_key"])
-        self.assertEqual(d["steps"][0]["args"]["dx"], 266)   # atan2(400, 70) ≈ 80° → 266 px по 0.3°/px
+        self.assertEqual(d["steps"][0]["args"]["dx"], 124)   # atan2(400, 70) ≈ 80° × 0.7 / 0.45°/px
         self.assertEqual(d["steps"][1]["args"], {"key": "w", "seconds": 2.0})
         d = g.sanitize({"actions": [{"action": "go_to", "args": {"x": 500, "y": 100, "seconds": 9}}]}, 1920, 1080)
         self.assertEqual([x["action"] for x in d["steps"]], ["hold_key"])       # почти прямо — без поворота
@@ -121,6 +121,27 @@ class GameBotTests(unittest.TestCase):
         import plan_validator as pv
         self.assertTrue(pv.validate_step({"action": "move_turn", "args": {"dx": 100, "seconds": 1.5, "key": "w"}})[0])
         self.assertFalse(pv.validate_step({"action": "move_turn", "args": {"dx": 9999, "seconds": 1, "key": "w"}})[0])
+
+    def test_escape_steps(self):
+        import game_bot as g
+        import plan_validator as pv
+        for level in (1, 2, 3, 4, 7):
+            for side in (1, -1):
+                steps = g.escape_steps(level, side)
+                self.assertTrue(steps)
+                for st in steps:
+                    self.assertTrue(pv.validate_step(st)[0], st)
+        self.assertEqual(g.escape_steps(1, 1)[0]["args"]["key"], "space")
+        self.assertEqual(g.escape_steps(2, 1)[1]["args"]["key"], "d")
+        self.assertEqual(g.escape_steps(2, -1)[1]["args"]["key"], "a")
+
+    def test_mask_center_hides_character(self):
+        import game_bot as g
+        from PIL import Image
+        a = Image.new("L", (100, 100), 10)
+        b = a.copy()
+        b.paste(200, (45, 45, 55, 55))                     # «анимация» в центре
+        self.assertEqual(list(g.mask_center(a).getdata()), list(g.mask_center(b).getdata()))
 
     def test_sanitize_bad_input(self):
         import game_bot as g
