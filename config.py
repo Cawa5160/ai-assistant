@@ -13,7 +13,7 @@ BASE_DIR = DATA_DIR  # рядом со скриптом (или рядом с .e
 SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
 LOG_FILE = os.path.join(BASE_DIR, "action_log.txt")
 
-APP_VERSION = "3.2.0"
+APP_VERSION = "3.3.0"
 SETTINGS_VERSION = 2  # растёт, когда меняются значения по умолчанию, которые нужно применить и старым установкам
 
 DEFAULTS = {
@@ -38,6 +38,8 @@ DEFAULTS = {
     "use_fallback_models": True,   # при лимите основной модели пробовать запасные (лимит у каждой модели свой)
     "fallback_models": ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
     "auto_confirm_seconds": 5,  # таймер автозапуска простых команд (0 — всегда ждать клика)
+    "game_max_minutes": 60,      # игровой режим: максимум минут за один запуск (0 — без ограничения)
+    "game_step_delay": 0.3,      # игровой режим: пауза между пачками действий, сек.
     "agent_step_delay": 0.6,    # пауза после действия, чтобы интерфейс успел обновиться, сек.
     "agent_thinking": "minimal",   # уровень "размышлений" Gemini 3.x для автопилота: minimal|low|medium|high ("" = по умолчанию)
     "view_only": False,         # режим «только смотреть»: ИИ отвечает про экран, но ничего не нажимает и не печатает

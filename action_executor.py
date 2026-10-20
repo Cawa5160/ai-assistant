@@ -263,6 +263,17 @@ def press_key(key: str):
     pyautogui.press(key)
 
 
+def hold_key(key: str, seconds: float):
+    """Удерживает клавишу (ходьба в играх: W/A/S/D). Отпускает в любом случае."""
+    seconds = max(0.05, min(float(seconds), 10.0))
+    log(f"Удерживаю клавишу {key} {seconds} с")
+    pyautogui.keyDown(key)
+    try:
+        time.sleep(seconds)
+    finally:
+        pyautogui.keyUp(key)
+
+
 def hotkey(*keys):
     log(f"Комбинация клавиш: {'+'.join(keys)}")
     pyautogui.hotkey(*keys)
@@ -324,6 +335,8 @@ def run_step(step: dict):
         type_text(args["text"], bool(args.get("sensitive", False)))
     elif action == "press_key":
         press_key(args["key"])
+    elif action == "hold_key":
+        hold_key(args["key"], args["seconds"])
     elif action == "hotkey":
         hotkey(*args["keys"])
     elif action == "scroll":

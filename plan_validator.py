@@ -22,6 +22,7 @@ ALLOWED_ACTIONS = {
     "save_screenshot": {"where": str},
     "type_text": {"text": str},
     "press_key": {"key": str},
+    "hold_key": {"key": str, "seconds": (int, float)},
     "hotkey": {"keys": list},
     "create_file": {"path": str},
     "move_file": {"src": str, "dst": str},
@@ -153,6 +154,13 @@ def validate_step(step):
     elif action == "press_key":
         if args["key"].lower() not in ALLOWED_KEYS:
             return False, f"press_key: недопустимая клавиша '{args['key']}'"
+
+    elif action == "hold_key":
+        if args["key"].lower() not in ALLOWED_KEYS:
+            return False, f"hold_key: недопустимая клавиша '{args['key']}'"
+        sec = args["seconds"]
+        if sec != sec or not (0.05 <= sec <= 10):
+            return False, "hold_key: допустимо от 0.05 до 10 секунд"
 
     elif action == "hotkey":
         keys = args["keys"]

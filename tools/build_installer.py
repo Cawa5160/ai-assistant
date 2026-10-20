@@ -22,7 +22,7 @@ FILES_TO_EMBED = [
     "action_executor.py", "agent_loop.py", "ai_brain.py", "app_paths.py",
     "atomic_io.py", "autostart.py", "config.py", "diagnostics.py", "history.py",
     "installer_gui.py", "installer_qt.py", "installer_tk.py", "key_manager.py", "local_brain.py", "logger.py", "main.py",
-    "notifications.py", "quick_commands.py", "quick_actions.py", "macros.py", "telegram_bot.py", "media_input.py", "clipboard_tools.py", "backup.py", "templates.py", "wakeword.py", "mouse.py", "app_profiles.py", "audit.py", "updater.py", "openrouter.py", "ui_elements.py", "chat.py", "hardware.py", "local_llm.py", "i18n.py", "lang_en.py", "lang_uk.py", "plan_validator.py", "privacy.py", "scheduler.py",
+    "notifications.py", "quick_commands.py", "quick_actions.py", "macros.py", "telegram_bot.py", "media_input.py", "clipboard_tools.py", "backup.py", "templates.py", "wakeword.py", "mouse.py", "app_profiles.py", "audit.py", "updater.py", "openrouter.py", "game_bot.py", "ui_elements.py", "chat.py", "hardware.py", "local_llm.py", "i18n.py", "lang_en.py", "lang_uk.py", "plan_validator.py", "privacy.py", "scheduler.py",
     "screen_utils.py", "secure_store.py", "shortcuts.py", "single_instance.py", "theme.py",
     "ui_thread.py", "voice_input.py", "voice_output.py",
     "qt_ui/__init__.py", "qt_ui/tokens.py", "qt_ui/icons.py", "qt_ui/theme_manager.py", "qt_ui/widgets.py",
@@ -32,7 +32,7 @@ FILES_TO_EMBED = [
     "assets/app.ico", "assets/logo_128.png", "assets/logo_64.png",
 ]
 
-APP_VERSION_LABEL = "3.2.0"
+APP_VERSION_LABEL = "3.3.0"
 SUBDIRS = sorted({os.path.dirname(p) for p in FILES_TO_EMBED if "/" in p})
 
 

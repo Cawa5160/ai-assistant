@@ -51,6 +51,8 @@ import theme
 import ui_thread
 import plan_validator
 import agent_loop
+import app_profiles
+import game_bot
 import voice_input
 import voice_output
 import action_executor
@@ -406,6 +408,61 @@ def _run_agent_visible(user_command: str, on_wait) -> str:
     return "ok"
 
 
+def _run_game(user_command: str) -> str:
+    """Игровой режим: бот играет за пользователя в окне, на которое он переключится после отсчёта."""
+    if _is_remote():
+        notify("AI Ассистент", "Игровой режим запускается только с самого компьютера.")
+        return "ok"
+    ok = gui.ask_yes_no(
+        "Игровой режим",
+        f"Цель: {user_command}\n\nБот будет играть за тебя: смотреть на экран, жать клавиши и мышь. "
+        "Нужно, чтобы игра была в окне на переднем плане; если переключишься на другое окно — бот подождёт.\n\n"
+        "Остановить: кнопка 🛑 или резкий рывок мыши в левый верхний угол. В онлайн-играх автоклики могут нарушать правила — "
+        "риск бана на тебе. После «Начать» есть 10 секунд, чтобы переключиться в игру.", "Начать", "Отмена")
+    if not ok:
+        history.add(user_command, "игровой режим", "отменено пользователем")
+        return "ok"
+    notify("AI Ассистент", "Переключись в игру — начну через 10 секунд.")
+    _hide_own_windows()
+    window = None
+    try:
+        for _ in range(100):
+            if _stop_event.is_set():
+                history.add(user_command, "игровой режим", "остановлено пользователем")
+                return "ok"
+            time.sleep(0.1)
+        proc = app_profiles.foreground_process()
+        if proc in game_bot.NOT_A_GAME and proc != "":
+            notify("AI Ассистент", "Не вижу окна игры на переднем плане — не начинаю. Открой игру и повтори команду.")
+            history.add(user_command, "игровой режим", "игра не найдена")
+            return "ok"
+        global _active_agent
+        window = gui.open_agent_window(user_command, 99999)
+        _active_agent = window
+        result = {"ok": False, "message": "Остановлено пользователем."}
+
+        def worker():
+            try:
+                ok_, msg = game_bot.run_game(user_command, window, proc)
+            except Exception as e:
+                log(f"Ошибка игрового режима: {e}")
+                ok_, msg = False, f"Ошибка игрового режима: {e}"
+            result["ok"], result["message"] = ok_, msg
+            window.finish(ok_, msg)
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+        try:
+            thread.join()
+        finally:
+            _active_agent = None
+    finally:
+        _restore_own_windows()
+    history.add(user_command, "игровой режим", result["message"])
+    notify("Игровой режим: готово" if result["ok"] else "Игровой режим остановлен", result["message"])
+    return "ok"
+
+
 def _run_quick_action(user_command: str, action) -> str:
     """Таймер, калькулятор, открытие папки — выполняет сама программа, без ИИ."""
     summary, run = action
@@ -637,6 +694,8 @@ def process_command(user_command: str):
             outcome = _run_quick_action(user_command, action)
         elif config.get("view_only"):
             outcome = _run_view_only(user_command)
+        elif game_bot.is_play_command(user_command):
+            outcome = _run_game(user_command)
         else:
             plan = macros.try_macro_plan(user_command) or templates.try_template_plan(user_command) or try_quick_plan(user_command) or try_local_plan(user_command)
             if plan is not None:
