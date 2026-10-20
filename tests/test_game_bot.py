@@ -110,7 +110,9 @@ class GameBotTests(unittest.TestCase):
             return {"status": "continue", "intent": "i", "memory": "", "message": "", "steps": [],
                     "target": {"name": names[i], "x": 1, "y": 1, "state": "approaching"}}, "x"
         ui = mock.Mock(abort_event=threading.Event())
-        with mock.patch.object(g, "decide", side_effect=fake), \
+        orig = g.config.get
+        with mock.patch.object(g.config, "get", side_effect=lambda k, *a: "llm" if k == "game_engine" else orig(k, *a)), \
+                mock.patch.object(g, "decide", side_effect=fake), \
                 mock.patch.object(g.agent_loop, "_wait_if_paused", return_value=True), \
                 mock.patch.object(g.agent_loop, "_sleep", return_value=True), \
                 mock.patch.object(g.screen_utils, "take_screenshot_image", return_value=None):
@@ -160,7 +162,9 @@ class GameBotTests(unittest.TestCase):
         import game_bot as g
         ui = mock.Mock(abort_event=threading.Event())
         done = {"status": "done", "intent": "", "memory": "", "message": "ок", "steps": []}
-        with mock.patch.object(g, "decide", return_value=(done, "x")), \
+        orig = g.config.get
+        with mock.patch.object(g.config, "get", side_effect=lambda k, *a: "llm" if k == "game_engine" else orig(k, *a)), \
+                mock.patch.object(g, "decide", return_value=(done, "x")), \
                 mock.patch.object(g.agent_loop, "_wait_if_paused", return_value=True):
             self.assertEqual(g.run_game("играй", ui, ""), (True, "ок"))
 

@@ -15,3 +15,4 @@ PySide6-Essentials>=6.8   # интерфейс программы (окна, т�
 pypdf>=4.0   # чтение PDF в чате (необязательно)
 uiautomation
 comtypes
+numpy>=1.26   # быстрое зрение игрового бота
