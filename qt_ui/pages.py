@@ -41,7 +41,7 @@ class HomePage(QWidget):
 
     CHIPS = [("camera", "Скриншот", "сделай скриншот"), ("timer", "Таймер 10 минут", "поставь таймер на 10 минут"),
              ("globe", "Открыть браузер", "открой браузер"), ("note", "Блокнот", "открой блокнот"),
-             ("volume", "Громче", "громче"), ("layers", "Файлы", "@files"), ("mic", "Голос", "")]
+             ("volume", "Громче", "громче"), ("layers", "Файлы", "@files"), ("gamepad", "Играть", "@game"), ("mic", "Голос", "")]
 
     def __init__(self, backend, parent=None):
         super().__init__(parent)
@@ -144,6 +144,10 @@ class HomePage(QWidget):
     def _chip(self, cmd):
         if cmd == "@files":
             self.file_tools_requested.emit()
+        elif cmd == "@game":
+            self.field.setText("играй в ")
+            self.field.setFocus()
+            self.field.setCursorPosition(len(self.field.text()))
         elif cmd:
             self.command.emit(cmd)
         else:

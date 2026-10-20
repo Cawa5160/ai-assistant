@@ -1112,3 +1112,6 @@ TR.update({'🎯 Держусь цели:': '🎯 Sticking to the target:'})
 
 
 TR.update({'🚧 Упёрся — обхожу, попытка:': '🚧 Blocked — going around, attempt:', '🎯 Иду к цели:': '🎯 Heading to the target:'})
+
+
+TR.update({'Играть': 'Play', '  Играть': 'Play'})
