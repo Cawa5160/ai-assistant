@@ -54,6 +54,10 @@ class Tracker:
         self.tpl = _gray(patch)
         self.misses = 0
 
+    def shift(self, dx_units: float):
+        """Сдвигает ожидаемое положение цели по горизонтали (после поворота камеры мир «уезжает» по экрану)."""
+        self.px = min(max(self.px + dx_units / SIDE * (self.w - 1), 0.0), self.w - 1.0)
+
     def _crop(self, frame, cx, cy):
         r = self.r
         x0, y0 = int(round(cx)) - r, int(round(cy)) - r
@@ -67,8 +71,15 @@ class Tracker:
         y0, y1 = max(0, int(self.py) - sh), min(self.h, int(self.py) + sh)
         return x0, y0, x1, y1
 
-    def update(self, frame):
+    def update(self, frame, max_jump: float = 260.0):
+        """max_jump — на сколько единиц сетки цель может сместиться между кадрами (дальше — считаем, что схватили чужое)."""
+        ox, oy = self.px, self.py
         res = self._update_color(frame) if self.mode == "color" else self._update_patch(frame)
+        if res is not None:
+            jump = max(abs(res[0] - ox) / (self.w - 1), abs(res[1] - oy) / (self.h - 1)) * SIDE
+            if jump > max_jump:
+                self.px, self.py = ox, oy
+                res = None
         if res is None:
             self.misses += 1
             return None

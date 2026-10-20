@@ -65,9 +65,20 @@ class PilotMathTests(unittest.TestCase):
         mode, dx = gp.steer(40)
         self.assertEqual(mode, "arc")
         self.assertGreater(dx, 0)
+        self.assertLessEqual(dx * 0.45, 25.01)               # подворот за шаг ограничен
         mode, dx = gp.steer(-150)
         self.assertEqual(mode, "turn")
         self.assertLess(dx, 0)
+        self.assertLessEqual(abs(dx) * 0.45, 90.01)
+        self.assertEqual(gp.steer(70)[0], "turn")
+
+    def test_tracker_rejects_jump_and_shift(self):
+        import game_vision as gv
+        t = gv.Tracker(_frame(100, 120), 100 / 319 * 1000, 120 / 179 * 1000)
+        self.assertIsNone(t.update(_frame(280, 120)))          # прыжок через пол-экрана — чужой объект
+        t2 = gv.Tracker(_frame(100, 120), 100 / 319 * 1000, 120 / 179 * 1000)
+        t2.shift(300)                                          # камера повернулась: ожидаем цель правее
+        self.assertAlmostEqual(t2.px, 100 + 0.3 * 319, delta=1)
 
     def test_near(self):
         import game_pilot as gp

@@ -51,15 +51,22 @@ PILOT_PROMPT = """Ты — «глаза» игрового бота: играе�
 
 # ---------- чистая математика управления (проверяется тестами) ----------
 
-def steer(theta: float, gain: float = 0.6, dpp: float = None):
+HFOV = 104.0               # горизонтальный угол обзора камеры Roblox по умолчанию, градусов (для оценки сдвига цели на кадре)
+MAX_ARC_DEG = 25.0         # за один шаг подворачиваем не больше (иначе цель уезжает из зоны поиска трекера)
+DEADBAND = 10.0            # меньше — идём прямо
+
+
+def steer(theta: float, gain: float = 0.5, dpp: float = None):
     """Угол до цели (градусы, + вправо) -> ('turn'|'arc'|'walk', dx в пикселях мыши).
-    turn — стоим и разворачиваемся (цель сбоку/сзади); arc — идём и подворачиваем; walk — идём прямо."""
+    turn — стоим и разворачиваемся (цель далеко сбоку/сзади); arc — идём и подворачиваем; walk — идём прямо."""
     dpp = dpp or float(config.get("game_deg_per_px") or 0.45)
     a = abs(theta)
-    if a > 100:
-        return "turn", int(max(-700, min(700, theta * float(config.get("game_turn_fraction") or 0.7) / dpp)))
-    if a > 12:
-        return "arc", int(max(-400, min(400, theta * gain / dpp)))
+    if a > 60:
+        deg = max(-90.0, min(90.0, theta * float(config.get("game_turn_fraction") or 0.7)))
+        return "turn", int(deg / dpp)
+    if a > DEADBAND:
+        deg = max(-MAX_ARC_DEG, min(MAX_ARC_DEG, theta * gain))
+        return "arc", int(deg / dpp)
     return "walk", 0
 
 
@@ -160,12 +167,18 @@ def follow(target: dict, ui, game_process: str):
     side = 1
     last_near = False
     last_report = 0.0
+    pending_shift = 0.0
+    theta_s = None
+    turn_ticks = 0
     while time.time() - t0 < MAX_FOLLOW_SECONDS:
         if ui.abort_event.is_set():
             return "stopped"
         if game_process and game_bot._foreground() != game_process:
             return "away"
         frame = game_vision.grab()
+        if pending_shift:
+            tracker.shift(pending_shift)               # камера повернулась — цель ожидаемо сместилась на кадре
+            pending_shift = 0.0
         pos = tracker.update(frame)
         if pos is None:
             if last_near:
@@ -205,7 +218,12 @@ def follow(target: dict, ui, game_process: str):
             prev, prev_walked = None, False
             continue
         theta = game_bot.turn_angle(x, y)
-        mode, dx = steer(theta)
+        theta_s = theta if theta_s is None else 0.5 * theta_s + 0.5 * theta     # сглаживание: не дёргаемся от шума трекера
+        mode, dx = steer(theta_s)
+        dpp = float(config.get("game_deg_per_px") or 0.45)
+        turn_ticks = turn_ticks + 1 if mode == "turn" else 0
+        if turn_ticks > 4:
+            return "lost"                                # крутимся на месте и не сходимся — пусть ИИ посмотрит заново
         if mode == "turn":
             _do({"action": "look", "args": {"dx": dx, "dy": 0}})
             prev_walked = False
@@ -215,6 +233,8 @@ def follow(target: dict, ui, game_process: str):
         else:
             _hk("w", TICK)
             prev_walked = True
+        pending_shift = -(dx * dpp) / HFOV * 1000.0 * 0.9
+        theta_s -= dx * dpp                              # после поворота ожидаемый угол до цели стал меньше
         prev = frame
         if time.time() - last_report > 1.0:
             last_report = time.time()
