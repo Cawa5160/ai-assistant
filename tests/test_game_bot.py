@@ -41,6 +41,26 @@ class GameBotTests(unittest.TestCase):
         self.assertEqual([s["action"] for s in d["steps"]], ["look", "hold_key"])
         self.assertEqual(d["steps"][1]["args"], {"key": "space", "seconds": 0.1})
 
+    def test_go_to_expands(self):
+        import game_bot as g
+        d = g.sanitize({"actions": [{"action": "go_to", "args": {"x": 900, "y": 500, "seconds": 2}}]}, 1920, 1080)
+        self.assertEqual([x["action"] for x in d["steps"]], ["look", "hold_key"])
+        self.assertEqual(d["steps"][0]["args"]["dx"], 100)
+        self.assertEqual(d["steps"][1]["args"], {"key": "w", "seconds": 2.0})
+        d = g.sanitize({"actions": [{"action": "go_to", "args": {"x": 510, "y": 500, "seconds": 9}}]}, 1920, 1080)
+        self.assertEqual([x["action"] for x in d["steps"]], ["hold_key"])       # почти прямо — без поворота
+        self.assertEqual(d["steps"][0]["args"]["seconds"], 4.0)
+
+    def test_look_alone_gets_walk(self):
+        import game_bot as g
+        d = g.sanitize({"actions": [{"action": "look", "args": {"dx": 200, "dy": 0}}]}, 1920, 1080)
+        self.assertEqual([x["action"] for x in d["steps"]], ["look", "hold_key"])
+
+    def test_tycoon_detect(self):
+        import game_bot as g
+        self.assertTrue(g.is_tycoon("играй в роблокс тайкун"))
+        self.assertFalse(g.is_tycoon("играй в шахматы"))
+
     def test_sanitize_bad_input(self):
         import game_bot as g
         self.assertEqual(g.sanitize("мусор", 100, 100)["steps"], [])
