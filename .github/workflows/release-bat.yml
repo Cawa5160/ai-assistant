@@ -1,0 +1,39 @@
+name: Release installer (.bat)
+# Ручной запуск: Actions -> «Release installer (.bat)» -> Run workflow.
+# Собирает AI_Assistant_Setup.bat из текущей версии (config.py) и выкладывает его в релиз vX.Y.Z.
+on:
+  workflow_dispatch:
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Версия и описание из CHANGELOG
+        id: ver
+        run: |
+          python - <<'PY'
+          import os, re
+          ver = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', open("config.py", encoding="utf-8").read()).group(1)
+          log = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(r"^## .*?(?=^## |\Z)", log, re.S | re.M)
+          notes = (m.group(0) if m else "") + "\n\nСкачай **AI_Assistant_Setup.bat** и запусти: он проверит Python, распакует программу и откроет установщик. Нужен бесплатный ключ Gemini: aistudio.google.com/apikey\n"
+          open("release_notes.md", "w", encoding="utf-8").write(notes)
+          open(os.environ["GITHUB_OUTPUT"], "a").write(f"v={ver}\n")
+          PY
+      - name: Собрать и проверить установщик
+        run: |
+          python tools/build_installer.py
+          python tools/verify_installer.py
+          cp ../AI_Assistant_Setup.bat ./AI_Assistant_Setup.bat
+      - name: Выложить релиз
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          name: v${{ steps.ver.outputs.v }}
+          body_path: release_notes.md
+          files: AI_Assistant_Setup.bat
